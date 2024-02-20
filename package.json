@@ -1,0 +1,38 @@
+{
+	"name": "permaweb-deploy",
+	"version": "1.0.0",
+	"description": "Permaweb app deployment package",
+	"main": "index.js",
+	"scripts": {
+		"format": "eslint --fix . && npx prettier --write .",
+		"start": "node src/index.js",
+    "build": "babel src --out-dir dist"
+	},
+	"bin": {
+		"permaweb-deploy": "./dist/index.js"
+	},
+	"dependencies": {
+		"@irys/sdk": "0.1.0-a1",
+		"arweave": "1.13.7",
+		"warp-contracts": "1.4.26"
+	},
+	"devDependencies": {
+		"@babel/cli": "^7.23.9",
+		"@babel/core": "^7.23.9",
+		"@babel/eslint-parser": "^7.23.10",
+		"@babel/preset-env": "^7.23.9",
+		"eslint": "^8.35.0",
+		"eslint-plugin-import": "^2.27.5",
+		"eslint-plugin-simple-import-sort": "^10.0.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/permaweb/permaweb-deploy.git"
+	},
+	"author": "NickJ202",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/permaweb/permaweb-deploy/issues"
+	},
+	"homepage": "https://github.com/permaweb/permaweb-deploy#readme"
+}

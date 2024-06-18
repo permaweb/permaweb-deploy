@@ -1,18 +1,32 @@
 #!/usr/bin/env node
 
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+
 import Arweave from 'arweave';
 import Irys from '@irys/sdk';
 import { defaultCacheOptions, WarpFactory } from 'warp-contracts';
 
 const DEPLOY_FOLDER = './dist';
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
-const ANT_CONTRACT = process.env.ANT_CONTRACT;
+
+const argv = yargs(hideBin(process.argv))
+  .option('ant-contract', {
+    alias: 'a',
+    type: 'string',
+    description: 'The ANT contract address',
+    demandOption: true,
+  })
+  .argv;
+
+const ANT_CONTRACT = argv.antContract;
 
 (async () => {
     if (!DEPLOY_KEY) { 
         console.error('DEPLOY_KEY not configured'); 
         return; 
     }
+
     if (!ANT_CONTRACT) { 
         console.error('ANT_CONTRACT not configured'); 
         return; 

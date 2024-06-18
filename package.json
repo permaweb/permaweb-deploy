@@ -1,12 +1,12 @@
 {
 	"name": "permaweb-deploy",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Permaweb app deployment package",
 	"main": "index.js",
 	"scripts": {
 		"format": "eslint --fix . && npx prettier --write .",
 		"start": "node src/index.js",
-    "build": "babel src --out-dir dist"
+		"build": "babel src --out-dir dist"
 	},
 	"bin": {
 		"permaweb-deploy": "./dist/index.js"
@@ -14,7 +14,8 @@
 	"dependencies": {
 		"@irys/sdk": "0.1.0-a1",
 		"arweave": "1.13.7",
-		"warp-contracts": "1.4.26"
+		"warp-contracts": "1.4.26",
+		"yargs": "^17.7.2"
 	},
 	"devDependencies": {
 		"@babel/cli": "^7.23.9",

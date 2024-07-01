@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
+import { ANT, ArweaveSigner } from '@ar.io/sdk';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 import Irys from '@irys/sdk';
-import { createDataItemSigner, message, result } from '@permaweb/aoconnect';
 
 const argv = yargs(hideBin(process.argv))
 	.option('ant-process', {
@@ -41,6 +41,8 @@ export function getTagValue(list, name) {
 		return;
 	}
 
+	// TODO: allow optional (subdomain input, default to '@')
+
 	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
 	
 	const irys = new Irys({ url: 'https://turbo.ardrive.io', token: 'arweave', key: jwk });
@@ -52,30 +54,19 @@ export function getTagValue(list, name) {
 			indexFile: 'index.html',
 		});
 
-		const response = await message({
-			process: ANT_PROCESS,
-			signer: createDataItemSigner(jwk),
-			tags: [
-				{ name: 'Action', value: 'Set-Record' },
-				{ name: 'Sub-Domain', value: '@' },
-				{ name: 'Transaction-Id', value: txResult.id },
-				{ name: 'TTL-Seconds', value: '3600' },
-			],
-		});
+		const signer = new ArweaveSigner(jwk);
+		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
-		const { Messages } = await result({ message: response, process: ANT_PROCESS });
-		
-		if (Messages && Messages.length > 0) {
-			const responseAction = getTagValue(Messages[0].Tags, 'Action');
-			if (responseAction) {
-				if (responseAction === 'Set-Record-Notice') console.log(`Deployed Tx [${txResult.id}] to ANT process [${ANT_PROCESS}]`);
-				else if (responseAction === 'Invalid-Set-Record-Notice') console.log('Error deploying bundle');
-				else console.error('Error deploying bundle');
-			}
-		}
-		else {
-			console.error('Error deploying bundle')
-		}
+		// update the ANT record (assumes the JWK is a controller or owner)
+		await ant.setRecord({
+			undername: '@',
+			transactionId: txResult.id,
+			ttlSeconds: 3600,
+		}, {
+			name: 'GIT-HASH', value: process.env.GITHUB_SHA,
+		})
+
+		console.log(`Deployed ${DEPLOY_FOLDER} folder with txId: ${txResult.id}`);
 	} catch (e) {
 		console.error(e);
 	}

@@ -59,9 +59,9 @@ export function getTagValue(list, name) {
 
 		// update the ANT record (assumes the JWK is a controller or owner)
 		await ant.setRecord({
-			subDomain: '@',
-			txId: txResult.id,
-			ttl: 3600,
+			undername: '@',
+			transactionId: txResult.id,
+			ttlSeconds: 3600,
 		}, {
 			name: 'GIT-HASH', value: process.env.GITHUB_SHA,
 		})

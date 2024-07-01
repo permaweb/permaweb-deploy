@@ -1,11 +1,10 @@
 {
 	"name": "permaweb-deploy",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"description": "Permaweb app deployment package",
 	"main": "index.js",
+	"type": "module",
 	"scripts": {
-		"format": "eslint --fix . && npx prettier --write .",
-		"start": "node src/index.js",
 		"build": "babel src --out-dir dist"
 	},
 	"bin": {
@@ -13,8 +12,7 @@
 	},
 	"dependencies": {
 		"@irys/sdk": "0.1.0-a1",
-		"arweave": "1.13.7",
-		"warp-contracts": "1.4.26",
+		"@permaweb/aoconnect": "^0.0.56",
 		"yargs": "^17.7.2"
 	},
 	"devDependencies": {

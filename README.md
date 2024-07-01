@@ -1,10 +1,10 @@
 # Permaweb deployment package
 
-Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of JavaScript bundles to the permaweb using Arweave. It simplifies the process by bundling JS code, deploying it as a transaction to Arweave, and updating ArNS (Arweave Name Service) with the transaction ID, effectively using it as a decentralized DNS.
+Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of JavaScript bundles to the permaweb using Arweave. It simplifies the process by bundling JS code, deploying it as a transaction to Arweave, and updating ArNS (Arweave Name Service) with the transaction ID.
 
 ### Features
 - **Bundle Deployment:** Automatically bundles your JS code and deploys it to Arweave.
-- **DNS Update:** Updates ArNS with the new transaction ID each time new content is deployed.
+- **ArNS Update:** Updates ArNS with the new transaction ID each time new content is deployed.
 - **Automated Workflow:** Integrates with GitHub Actions for continuous deployment directly from your repository.
 
 ### Installation
@@ -28,11 +28,11 @@ To deploy your application, ensure you have a build script and a deployment scri
 ```json
 "scripts": {
     "build": "your-build-command",
-    "deploy-main": "npm run build && permaweb-deploy --ant-contract <ANT_CONTRACT_ADDRESS>"
+    "deploy-main": "npm run build && permaweb-deploy --ant-process <ANT_PROCESS>"
 }
 ```
 
-Replace `<ANT_CONTRACT_ADDRESS>` with your actual ANT contract address.
+Replace `<ANT_PROCESS>` with your actual ANT process.
 
 ### GitHub Actions Workflow
 To automate the deployment, set up a GitHub Actions workflow as follows:
@@ -61,4 +61,4 @@ jobs:
 ### Important Notes
 - **Security:** Always use a dedicated wallet for deployments to minimize risk.
 - **Wallet Key:** The wallet must be base64 encoded to be used in the deployment script.
-- **ANT Contract:** The ANT contract address must be passed at runtime to associate your deployment with a specific ANT node on Arweave.
+- **ANT Process:** The ANT process must be passed at runtime to associate your deployment with a specific ANT process on AO.

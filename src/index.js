@@ -3,64 +3,80 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import Arweave from 'arweave';
 import Irys from '@irys/sdk';
-import { defaultCacheOptions, WarpFactory } from 'warp-contracts';
+import { createDataItemSigner, message, result } from '@permaweb/aoconnect';
+
+const argv = yargs(hideBin(process.argv))
+	.option('ant-process', {
+		alias: 'a',
+		type: 'string',
+		description: 'The ANT process',
+		demandOption: true,
+	})
+	.argv;
 
 const DEPLOY_FOLDER = './dist';
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
+const ANT_PROCESS = argv.antProcess;
 
-const argv = yargs(hideBin(process.argv))
-  .option('ant-contract', {
-    alias: 'a',
-    type: 'string',
-    description: 'The ANT contract address',
-    demandOption: true,
-  })
-  .argv;
-
-const ANT_CONTRACT = argv.antContract;
+export function getTagValue(list, name) {
+	for (let i = 0; i < list.length; i++) {
+		if (list[i]) {
+			if (list[i].name === name) {
+				return list[i].value;
+			}
+		}
+	}
+	return STORAGE.none;
+}
 
 (async () => {
-    if (!DEPLOY_KEY) { 
-        console.error('DEPLOY_KEY not configured'); 
-        return; 
-    }
+	if (!DEPLOY_KEY) {
+		console.error('DEPLOY_KEY not configured');
+		return;
+	}
 
-    if (!ANT_CONTRACT) { 
-        console.error('ANT_CONTRACT not configured'); 
-        return; 
-    }
+	if (!ANT_PROCESS) {
+		console.error('ANT_PROCESS not configured');
+		return;
+	}
 
-    const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
-    const irys = new Irys({ url: 'https://turbo.ardrive.io', token: 'arweave', key: jwk });
-    const arweave = Arweave.init({ host: 'arweave.net', port: 443, protocol: 'https' });
-    
-    const warp = WarpFactory.custom(arweave, defaultCacheOptions, 'mainnet').useArweaveGateway().build();
-    const warpContract = warp.contract(ANT_CONTRACT).connect(jwk);
-    const contractState = (await warpContract.readState()).cachedValue.state;
+	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+	
+	const irys = new Irys({ url: 'https://turbo.ardrive.io', token: 'arweave', key: jwk });
 
-    try {
-        console.log(contractState);
-        console.log(`Deploying ${DEPLOY_FOLDER} folder`);
+	try {
+		console.log(`Deploying ${DEPLOY_FOLDER} folder`);
 
-        const txResult = await irys.uploadFolder(DEPLOY_FOLDER, {
-            indexFile: 'index.html',
-        });
+		const txResult = await irys.uploadFolder(DEPLOY_FOLDER, {
+			indexFile: 'index.html',
+		});
 
-        await new Promise((r) => setTimeout(r, 1000));
-        await warpContract.writeInteraction(
-            {
-                function: 'setRecord',
-                subDomain: '@',
-                transactionId: txResult.id,
-                ttlSeconds: 3600,
-            },
-            { disableBundling: true }
-        );
+		const response = await message({
+			process: ANT_PROCESS,
+			signer: createDataItemSigner(jwk),
+			tags: [
+				{ name: 'Action', value: 'Set-Record' },
+				{ name: 'Sub-Domain', value: '@' },
+				{ name: 'Transaction-Id', value: txResult.id },
+				{ name: 'TTL-Seconds', value: '3600' },
+			],
+		});
 
-        console.log(`Deployed [${txResult.id}] to [${contractState.name}]`);
-    } catch (e) {
-        console.error(e);
-    }
+		const { Messages } = await result({ message: response, process: ANT_PROCESS });
+		
+		if (Messages && Messages.length > 0) {
+			const responseAction = getTagValue(Messages[0].Tags, 'Action');
+			if (responseAction) {
+				if (responseAction === 'Set-Record-Notice') console.log(`Deployed Tx [${txResult.id}] to ANT process [${ANT_PROCESS}]`);
+				else if (responseAction === 'Invalid-Set-Record-Notice') console.log('Error deploying bundle');
+				else console.error('Error deploying bundle');
+			}
+		}
+		else {
+			console.error('Error deploying bundle')
+		}
+	} catch (e) {
+		console.error(e);
+	}
 })();

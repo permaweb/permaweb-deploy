@@ -22,7 +22,7 @@ module.exports = {
 					{
 						groups: [
 							['^react', '^@?\\w'],
-							['^arweave', '@irys/sdk', '^warp', '^@?\\w'],
+							['^arweave', '@irys/sdk', '@permaweb/aoconnect', '^@?\\w'],
 							['^\\u0000'],
 							['^\\.\\.(?!/?$)', '^\\.\\./?$'],
 							['^\\./(?=.*/)(?!/?$)', '^\\.(?!/?$)', '^\\./?$'],

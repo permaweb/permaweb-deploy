@@ -41,23 +41,28 @@ export function getTagValue(list, name) {
 		return;
 	}
 
-	// TODO: allow optional (subdomain input, default to '@')
+	// Should allow optional (subdomain input, default to '@')
 
 	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
 	
 	const irys = new Irys({ url: 'https://turbo.ardrive.io', token: 'arweave', key: jwk });
+	irys.uploader.useChunking = false;
 
 	try {
 		console.log(`Deploying ${DEPLOY_FOLDER} folder`);
 
 		const txResult = await irys.uploadFolder(DEPLOY_FOLDER, {
 			indexFile: 'index.html',
+			interactivePreflight: false,
+			logFunction: (log) => console.log(log),
 		});
+
+		console.log(`Bundle TxId [${txResult.id}]`);
 
 		const signer = new ArweaveSigner(jwk);
 		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
-		// update the ANT record (assumes the JWK is a controller or owner)
+		// Update the ANT record (assumes the JWK is a controller or owner)
 		await ant.setRecord({
 			undername: '@',
 			transactionId: txResult.id,
@@ -66,7 +71,7 @@ export function getTagValue(list, name) {
 			name: 'GIT-HASH', value: process.env.GITHUB_SHA,
 		})
 
-		console.log(`Deployed ${DEPLOY_FOLDER} folder with txId: ${txResult.id}`);
+		console.log(`Deployed TxId [${txResult.id}] to ANT [${ANT_PROCESS}]`);
 	} catch (e) {
 		console.error(e);
 	}

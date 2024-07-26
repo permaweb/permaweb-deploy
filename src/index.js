@@ -13,6 +13,12 @@ const argv = yargs(hideBin(process.argv))
 		description: 'The ANT process',
 		demandOption: true,
 	})
+	.option('undername', {
+		alias: 'u',
+		type: 'string',
+		description: "ANT undername to update.",
+		default: '@',
+	})
 	.argv;
 
 const DEPLOY_FOLDER = './dist';
@@ -41,7 +47,10 @@ export function getTagValue(list, name) {
 		return;
 	}
 
-	// Should allow optional (subdomain input, default to '@')
+	if (argv.undername.length == 0) {
+		console.error('undername must not be empty');
+		return;
+	}
 
 	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
 	
@@ -64,14 +73,14 @@ export function getTagValue(list, name) {
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
 		await ant.setRecord({
-			undername: '@',
+			undername: argv.undername,
 			transactionId: txResult.id,
 			ttlSeconds: 3600,
 		}, {
 			name: 'GIT-HASH', value: process.env.GITHUB_SHA,
 		})
 
-		console.log(`Deployed TxId [${txResult.id}] to ANT [${ANT_PROCESS}]`);
+		console.log(`Deployed TxId [${txResult.id}] to ANT [${ANT_PROCESS}] using undername [${argv.undername}]`);
 	} catch (e) {
 		console.error(e);
 	}

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
+import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
@@ -13,15 +14,19 @@ const argv = yargs(hideBin(process.argv))
 		description: 'The ANT process',
 		demandOption: true,
 	})
+	.option('deploy-folder', {
+		alias: 'd',
+		type: 'string',
+		description: 'Folder to deploy.',
+		default: './dist',
+	})
 	.option('undername', {
 		alias: 'u',
 		type: 'string',
-		description: "ANT undername to update.",
+		description: 'ANT undername to update.',
 		default: '@',
-	})
-	.argv;
+	}).argv;
 
-const DEPLOY_FOLDER = './dist';
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
 const ANT_PROCESS = argv.antProcess;
 
@@ -47,20 +52,30 @@ export function getTagValue(list, name) {
 		return;
 	}
 
+	if (argv.deployFolder.length == 0) {
+		console.error('deploy folder must not be empty');
+		return;
+	}
+
 	if (argv.undername.length == 0) {
 		console.error('undername must not be empty');
 		return;
 	}
 
+	if (!fs.existsSync(argv.deployFolder)) {
+		console.error(`deploy folder [${argv.deployFolder}] does not exist`);
+		return;
+	}
+
 	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
-	
+
 	const irys = new Irys({ url: 'https://turbo.ardrive.io', token: 'arweave', key: jwk });
 	irys.uploader.useChunking = false;
 
 	try {
-		console.log(`Deploying ${DEPLOY_FOLDER} folder`);
+		console.log(`Deploying ${argv.deployFolder} folder`);
 
-		const txResult = await irys.uploadFolder(DEPLOY_FOLDER, {
+		const txResult = await irys.uploadFolder(argv.deployFolder, {
 			indexFile: 'index.html',
 			interactivePreflight: false,
 			logFunction: (log) => console.log(log),
@@ -72,13 +87,17 @@ export function getTagValue(list, name) {
 		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
-		await ant.setRecord({
-			undername: argv.undername,
-			transactionId: txResult.id,
-			ttlSeconds: 3600,
-		}, {
-			name: 'GIT-HASH', value: process.env.GITHUB_SHA,
-		})
+		await ant.setRecord(
+			{
+				undername: argv.undername,
+				transactionId: txResult.id,
+				ttlSeconds: 3600,
+			},
+			{
+				name: 'GIT-HASH',
+				value: process.env.GITHUB_SHA,
+			}
+		);
 
 		console.log(`Deployed TxId [${txResult.id}] to ANT [${ANT_PROCESS}] using undername [${argv.undername}]`);
 	} catch (e) {

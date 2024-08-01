@@ -34,6 +34,18 @@ To deploy your application, ensure you have a build script and a deployment scri
 
 Replace `<ANT_PROCESS>` with your actual ANT process.
 
+#### Turbo
+To deploy your application using Turbo, simply add a `-t` or `--turbo` flag when running your deploy script:
+
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-turbo": "npm run build && permaweb-deploy --ant-process <ANT_PROCESS> -t"
+}
+```
+
+**NOTE**: This requires that the wallet provided as `DEPLOY_KEY` has [Turbo Credits](https://docs.ardrive.io/docs/turbo/what-is-turbo.html) to pay for the upload.
+
 ### GitHub Actions Workflow
 To automate the deployment, set up a GitHub Actions workflow as follows:
 ```yaml

@@ -5,8 +5,6 @@ import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import Irys from '@irys/sdk';
-
 import TurboDeploy from './turbo';
 
 const argv = yargs(hideBin(process.argv))
@@ -27,12 +25,6 @@ const argv = yargs(hideBin(process.argv))
 		type: 'string',
 		description: 'ANT undername to update.',
 		default: '@',
-	})
-	.option('turbo', {
-		alias: 't',
-		type: 'boolean',
-		description: 'Enable upload with Turbo',
-		default: false,
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
@@ -76,25 +68,8 @@ export function getTagValue(list, name) {
 	}
 
 	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
-
-	if (argv.turbo){
-		TurboDeploy(argv, jwk)
-	}
-	else
-	{const irys = new Irys({ url: 'https://turbo.ardrive.io', token: 'arweave', key: jwk });
-	irys.uploader.useChunking = false;
-
 	try {
-		console.log(`Deploying ${argv.deployFolder} folder`);
-
-		const txResult = await irys.uploadFolder(argv.deployFolder, {
-			indexFile: 'index.html',
-			interactivePreflight: false,
-			logFunction: (log) => console.log(log),
-		});
-
-		console.log(`Bundle TxId [${txResult.id}]`);
-
+		const manifestId = await TurboDeploy(argv, jwk);
 		const signer = new ArweaveSigner(jwk);
 		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
@@ -102,17 +77,21 @@ export function getTagValue(list, name) {
 		await ant.setRecord(
 			{
 				undername: argv.undername,
-				transactionId: txResult.id,
+				transactionId: manifestId,
 				ttlSeconds: 3600,
 			},
 			{
 				name: 'GIT-HASH',
 				value: process.env.GITHUB_SHA,
+			},
+			{
+				name: 'App-Name',
+				value: 'Permaweb-Deploy',
 			}
 		);
 
-		console.log(`Deployed TxId [${txResult.id}] to ANT [${ANT_PROCESS}] using undername [${argv.undername}]`);
+		console.log(`Deployed TxId [${manifestId}] to ANT [${ANT_PROCESS}] using undername [${argv.undername}]`);
 	} catch (e) {
 		console.error(e);
-	}}
+	}
 })();

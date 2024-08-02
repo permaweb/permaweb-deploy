@@ -12,7 +12,6 @@
 	"dependencies": {
 		"@ar.io/sdk": "^1.2.2",
 		"@ardrive/turbo-sdk": "^1.9.0",
-		"@irys/sdk": "0.1.1",
 		"mime-types": "^2.1.35",
 		"yargs": "17.7.2"
 	},

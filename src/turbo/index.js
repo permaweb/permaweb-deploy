@@ -1,5 +1,4 @@
-import { ANT } from '@ar.io/sdk';
-import { ArweaveSigner, TurboFactory } from '@ardrive/turbo-sdk';
+import { TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import mime from 'mime-types';
 import path from 'path';
@@ -12,10 +11,6 @@ async function getContentType(filePath) {
 
 export default async function TurboDeploy(argv, jwk) {
 	const turbo = TurboFactory.authenticated({ privateKey: jwk });
-	const ant = ANT.init({
-		signer: new ArweaveSigner(jwk),
-		processId: argv.antProcess,
-	});
 
 	const deployFolder = argv.deployFolder;
 	//Uses Arweave manifest version 0.2.0, which supports fallbacks
@@ -111,19 +106,6 @@ export default async function TurboDeploy(argv, jwk) {
 	const manifestId = await uploadManifest(newManifest);
 	if (manifestId) {
 		console.log(`Manifest uploaded with Id: ${manifestId}`);
-		try {
-			// sets the ArNS record
-			const recordSet = await ant.setRecord(
-				{
-					undername: argv.undername,
-					transactionId: manifestId,
-					ttlSeconds: 900,
-				},
-				{ tags: [{ name: 'App-Name', value: 'Permaweb-Deploy' }] }
-			);
-			console.log(`ArNS updated with txId: ${recordSet.id}`);
-		} catch (err) {
-			console.error('Error updating ArNS:', err);
-		}
+		return manifestId;
 	}
 }

@@ -79,14 +79,17 @@ export function getTagValue(list, name) {
 				undername: argv.undername,
 				transactionId: manifestId,
 				ttlSeconds: 3600,
-			},
-			{
-				name: 'GIT-HASH',
-				value: process.env.GITHUB_SHA,
-			},
-			{
-				name: 'App-Name',
-				value: 'Permaweb-Deploy',
+			},{
+				tags: [
+					{
+						name: 'GIT-HASH',
+						value: process.env.GITHUB_SHA,
+					},
+					{
+						name: 'App-Name',
+						value: 'Permaweb-Deploy',
+					},
+				]
 			}
 		);
 

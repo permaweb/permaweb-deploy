@@ -58,6 +58,12 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
 ```
 
+### To deploy to permaweb manually via cli
+
+```sh
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --ant-process <ANT_PROCESS>
+```
+
 ### Important Notes
 - **Security:** Always use a dedicated wallet for deployments to minimize risk.
 - **Wallet Key:** The wallet must be base64 encoded to be used in the deployment script.

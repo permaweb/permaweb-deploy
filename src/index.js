@@ -25,15 +25,12 @@ const argv = yargs(hideBin(process.argv))
 		description: 'ANT undername to update.',
 		default: '@',
 	})
-	.option('eth', {
-		alias: 'e',
-		type: 'boolean',
-		description: 'Connect with an ETH wallet instead of an Arweve wallet.',
-	})
-	.option('polygon', {
-		alias: 'p',
-		type: 'boolean',
-		description: 'Connect with a POL/MATIC wallet instead of an Arweave wallet.',
+	.option('sig-type', {
+		alias: 's',
+		type: 'string',
+		description: 'The type of signer to be used for deployment.',
+		choices: ['arweave', 'ethereum', 'polygon'],
+		default: 'arweave',
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
@@ -76,36 +73,29 @@ export function getTagValue(list, name) {
 		return;
 	}
 
-	// Throw an error if both --eth and --pol are true
-	if (argv.eth && argv.polygon) {
-		console.error('Error: Cannot deploy with both ETH and POL.');
-		process.exit(1); // Exit with an error code
-	}
-
-	let jwk;
-	if (argv.polygon || argv.eth) jwk = DEPLOY_KEY;
-	else {
-		jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
-	}
-
 	try {
 		let signer;
 		let token;
 
-		// Creates proper signer based on wallet type.
-		switch (true) {
-			case argv.eth:
-				signer = new EthereumSigner(jwk);
+		// Creates the proper signer based on the sig-type value
+		switch (argv['sig-type']) {
+			case 'ethereum':
+				signer = new EthereumSigner(DEPLOY_KEY);
 				token = 'ethereum';
 				break;
-			case argv.polygon:
-				signer = new EthereumSigner(jwk);
+			case 'polygon':
+				signer = new EthereumSigner(DEPLOY_KEY);
 				token = 'pol';
 				break;
-			default:
-				signer = new ArweaveSigner(jwk);
+			case 'arweave':
+				const parsedKey = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8')); // Parse DEPLOY_KEY for Arweave
+				signer = new ArweaveSigner(parsedKey);
 				token = 'arweave';
 				break;
+			default:
+				throw new Error(
+					`Invalid sig-type provided: ${argv['sig-type']}. Allowed values are 'arweave', 'ethereum', or 'polygon'.`
+				);
 		}
 
 		const turbo = TurboFactory.authenticated({

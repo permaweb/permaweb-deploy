@@ -132,6 +132,7 @@ export function getTagValue(list, name) {
 
 		const manifestId = uploadResult.manifestResponse.id;
 
+		//TODO: Add support for custom AO network configurations.
 		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
 		// Update the ANT record (assumes the signer is a controller or owner)

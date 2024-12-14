@@ -77,13 +77,13 @@ export function getTagValue(list, name) {
 	}
 
 	// Throw an error if both --eth and --pol are true
-	if (argv.eth && argv.pol) {
+	if (argv.eth && argv.polygon) {
 		console.error('Error: Cannot deploy with both ETH and POL.');
 		process.exit(1); // Exit with an error code
 	}
 
 	let jwk;
-	if (argv.pol || argv.eth) jwk = DEPLOY_KEY;
+	if (argv.polygon || argv.eth) jwk = DEPLOY_KEY;
 	else {
 		jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
 	}

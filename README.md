@@ -47,7 +47,7 @@ permaweb-deploy --ant-process <ANT_PROCESS> --deploy-folder "./next"
 
 #### Ethereum and POL/Matic
 
-Permaweb-deploy defaults to uploading with an Arweave Wallet. You can specify an ETH or POL/Matic wallet by providing a `-e` (`--ethereum`) flag for ETH or a `-p` (`--pol`) flag for POL/Matic.
+Permaweb-deploy defaults to uploading with an Arweave Wallet. You can specify an ETH or POL/Matic wallet by providing a `-e` (`--ethereum`) flag for ETH or a `-p` (`--polygon`) flag for POL/Matic.
 
 Providing both `-e` and `-p` flags will result in an error.
 

@@ -30,7 +30,7 @@ const argv = yargs(hideBin(process.argv))
 		type: 'boolean',
 		description: 'Connect with an ETH wallet instead of an Arweve wallet.',
 	})
-	.option('pol', {
+	.option('polygon', {
 		alias: 'p',
 		type: 'boolean',
 		description: 'Connect with a POL/MATIC wallet instead of an Arweave wallet.',
@@ -98,7 +98,7 @@ export function getTagValue(list, name) {
 				signer = new EthereumSigner(jwk);
 				token = 'ethereum';
 				break;
-			case argv.pol:
+			case argv.polygon:
 				signer = new EthereumSigner(jwk);
 				token = 'pol';
 				break;

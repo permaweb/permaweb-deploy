@@ -53,6 +53,8 @@ Providing both `-e` and `-p` flags will result in an error.
 
 The `DEPLOY_KEY` environmental variable must be set to the private key of the ETH or POL/Matic wallet, without any additional encoding.
 
+**NOTE:** All uploads via Permaweb-deploy are paid for using Turbo Credits, you cannot pay for an upload using the native token for ETH or POL/Matic directly. Get Turbo Credits at [turbo-topup.com](https://turbo-topup.com/)
+
 #### Undernames
 
 Permaweb-deploy can update undername records for an ArNS name instead of the top level name. That is, you can deploy your project to `this-project_my-name` where `this-project` is an undername on the ArNS name `my-name`. 

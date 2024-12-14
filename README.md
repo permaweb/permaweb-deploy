@@ -6,6 +6,7 @@ Inspired by the [cookbook github action deployment guide](https://cookbook.arwea
 - **Bundle Deployment:** Automatically bundles your JS code and deploys it to Arweave.
 - **ArNS Update:** Updates ArNS with the new transaction ID each time new content is deployed.
 - **Automated Workflow:** Integrates with GitHub Actions for continuous deployment directly from your repository.
+- **Cross-chain support:** Upload data to Arweave and update ArNS using Arweave, Eth, or POL/Matic wallets.
 
 ### Installation
 Install the package using npm:
@@ -20,7 +21,9 @@ Before using `permaweb-deploy`, you must:
    ```bash
    base64 -i wallet.json | pbcopy
    ```
-3. Ensure that the secret name for the encoded wallet is `DEPLOY_KEY`.
+2. Ensure that the secret name for the encoded wallet is `DEPLOY_KEY`.
+
+**NOTE:** ETH and POL/Matic wallets should use their private key, ***WITHOUT*** base64 encoding for `DEPLOY_KEY`
 
 ### Usage
 To deploy your application, ensure you have a build script and a deployment script in your `package.json`:
@@ -34,8 +37,36 @@ To deploy your application, ensure you have a build script and a deployment scri
 
 Replace `<ANT_PROCESS>` with your actual ANT process.
 
+#### `--deploy-folder`
+
+The default folder to upload is `./dist`, you can specify a different folder path using the `--deploy-folder` flag:
+
+```bash
+permaweb-deploy --ant-process <ANT_PROCESS> --deploy-folder "./next"
+```
+
+#### Ethereum and POL/Matic
+
+Permaweb-deploy defaults to uploading with an Arweave Wallet. You can specify an ETH or POL/Matic wallet by providing a `-e` (`--ethereum`) flag for ETH or a `-p` (`--pol`) flag for POL/Matic.
+
+Providing both `-e` and `-p` flags will result in an error.
+
+The `DEPLOY_KEY` environmental variable must be set to the private key of the ETH or POL/Matic wallet, without any additional encoding.
+
+#### Undernames
+
+Permaweb-deploy can update undername records for an ArNS name instead of the top level name. That is, you can deploy your project to `this-project_my-name` where `this-project` is an undername on the ArNS name `my-name`. 
+
+This is done by specifying the undername using the `--undername` flag:
+
+```bash
+permaweb-deploy --ant-process <ANT_PROCESS> --undername "this-project"
+```
+
 ### GitHub Actions Workflow
+
 To automate the deployment, set up a GitHub Actions workflow as follows:
+
 ```yaml
 name: publish
 
@@ -66,5 +97,5 @@ DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --ant-process <ANT_PROCE
 
 ### Important Notes
 - **Security:** Always use a dedicated wallet for deployments to minimize risk.
-- **Wallet Key:** The wallet must be base64 encoded to be used in the deployment script.
+- **Wallet Key:** Arweave wallets must be base64 encoded to be used in the deployment script. Ethereum and POL/Matic wallets should use their raw private key.
 - **ANT Process:** The ANT process must be passed at runtime to associate your deployment with a specific ANT process on AO.

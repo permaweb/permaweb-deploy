@@ -134,7 +134,7 @@ export function getTagValue(list, name) {
 
 		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
-		// Update the ANT record (assumes the JWK is a controller or owner)
+		// Update the ANT record (assumes the signer is a controller or owner)
 		await ant.setRecord(
 			{
 				undername: argv.undername,

@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 
 import { ANT, ArweaveSigner } from '@ar.io/sdk';
+import { EthereumSigner, TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-
-import TurboDeploy from './turbo';
 
 const argv = yargs(hideBin(process.argv))
 	.option('ant-process', {
 		alias: 'a',
 		type: 'string',
-		description: 'The ANT process',
+		description: 'The ANT process.',
 		demandOption: true,
 	})
 	.option('deploy-folder', {
@@ -25,6 +24,16 @@ const argv = yargs(hideBin(process.argv))
 		type: 'string',
 		description: 'ANT undername to update.',
 		default: '@',
+	})
+	.option('eth', {
+		alias: 'e',
+		type: 'boolean',
+		description: 'Connect with an ETH wallet instead of an Arweve wallet.',
+	})
+	.option('pol', {
+		alias: 'p',
+		type: 'boolean',
+		description: 'Connect with a POL/MATIC wallet instead of an Arweave wallet.',
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
@@ -67,10 +76,62 @@ export function getTagValue(list, name) {
 		return;
 	}
 
-	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+	// Throw an error if both --eth and --pol are true
+	if (argv.eth && argv.pol) {
+		console.error('Error: Cannot deploy with both ETH and POL.');
+		process.exit(1); // Exit with an error code
+	}
+
+	let jwk;
+	if (argv.pol || argv.eth) jwk = DEPLOY_KEY;
+	else {
+		jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+	}
+
 	try {
-		const manifestId = await TurboDeploy(argv, jwk);
-		const signer = new ArweaveSigner(jwk);
+		let signer;
+		let token;
+
+		// Creates proper signer based on wallet type.
+		switch (true) {
+			case argv.eth:
+				signer = new EthereumSigner(jwk);
+				token = 'ethereum';
+				break;
+			case argv.pol:
+				signer = new EthereumSigner(jwk);
+				token = 'pol';
+				break;
+			default:
+				signer = new ArweaveSigner(jwk);
+				token = 'arweave';
+				break;
+		}
+
+		const turbo = TurboFactory.authenticated({
+			signer: signer,
+			token: token,
+		});
+
+		const uploadResult = await turbo.uploadFolder({
+			folderPath: argv['deploy-folder'],
+			dataItemOpts: {
+				tags: [
+					{
+						name: 'App-Name',
+						value: 'Permaweb-Deploy',
+					},
+					// prevents identical transaction Ids from eth wallets
+					{
+						name: 'anchor',
+						value: new Date().toISOString(),
+					},
+				],
+			},
+		});
+
+		const manifestId = uploadResult.manifestResponse.id;
+
 		const ant = ANT.init({ processId: ANT_PROCESS, signer });
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
@@ -79,17 +140,22 @@ export function getTagValue(list, name) {
 				undername: argv.undername,
 				transactionId: manifestId,
 				ttlSeconds: 3600,
-			},{
+			},
+			{
 				tags: [
 					{
 						name: 'GIT-HASH',
-						value: process.env.GITHUB_SHA,
+						value: process.env.GITHUB_SHA || '',
 					},
 					{
 						name: 'App-Name',
 						value: 'Permaweb-Deploy',
 					},
-				]
+					{
+						name: 'anchor',
+						value: new Date().toISOString(),
+					},
+				],
 			}
 		);
 

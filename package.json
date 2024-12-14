@@ -10,8 +10,8 @@
 		"permaweb-deploy": "./dist/index.js"
 	},
 	"dependencies": {
-		"@ar.io/sdk": "^2.2.5",
-		"@ardrive/turbo-sdk": "^1.17.0",
+		"@ar.io/sdk": "^3.0.0",
+		"@ardrive/turbo-sdk": "^1.21.0",
 		"mime-types": "^2.1.35",
 		"yargs": "17.7.2"
 	},

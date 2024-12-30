@@ -82,13 +82,13 @@ export function getTagValue(list, name) {
 			},{
 				tags: [
 					{
-						name: 'GIT-HASH',
-						value: process.env.GITHUB_SHA,
-					},
-					{
 						name: 'App-Name',
 						value: 'Permaweb-Deploy',
 					},
+					...(process.env.GITHUB_SHA ? [{
+						name: 'GIT-HASH',
+						value: process.env.GITHUB_SHA,
+					}] : []),
 				]
 			}
 		);

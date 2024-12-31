@@ -95,6 +95,6 @@ export function getTagValue(list, name) {
 
 		console.log(`Deployed TxId [${manifestId}] to ANT [${ANT_PROCESS}] using undername [${argv.undername}]`);
 	} catch (e) {
-		console.error(e);
+		throw new Error(e);
 	}
 })();

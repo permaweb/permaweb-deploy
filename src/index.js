@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { ANT, ArweaveSigner } from '@ar.io/sdk';
+import { ANT, ARIO, ArweaveSigner } from '@ar.io/sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -8,10 +8,10 @@ import { hideBin } from 'yargs/helpers';
 import TurboDeploy from './turbo';
 
 const argv = yargs(hideBin(process.argv))
-	.option('ant-process', {
-		alias: 'a',
+	.option('arns-name', {
+		alias: 'n',
 		type: 'string',
-		description: 'The ANT process',
+		description: 'The ARNS name',
 		demandOption: true,
 	})
 	.option('deploy-folder', {
@@ -28,7 +28,7 @@ const argv = yargs(hideBin(process.argv))
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
-const ANT_PROCESS = argv.antProcess;
+const ARNS_NAME = argv.arnsName;
 
 export function getTagValue(list, name) {
 	for (let i = 0; i < list.length; i++) {
@@ -47,10 +47,11 @@ export function getTagValue(list, name) {
 		process.exit(1);
 	}
 
-	if (!ANT_PROCESS) {
-		console.error('ANT_PROCESS not configured');
+	if (!ARNS_NAME) {
+		console.error('ARNS_NAME not configured');
 		process.exit(1);
 	}
+
 
 	if (argv.deployFolder.length == 0) {
 		console.error('deploy folder must not be empty');
@@ -67,11 +68,18 @@ export function getTagValue(list, name) {
 		process.exit(1);
 	}
 
-	let jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+	const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+	const ario = ARIO.init()
+	const arnsNameRecord = await ario.getArNSRecord({name: ARNS_NAME}).catch((e) => {
+		console.error(`ARNS name [${ARNS_NAME}] does not exist`);
+		process.exit(1);
+	});
+
+
 	try {
 		const manifestId = await TurboDeploy(argv, jwk);
 		const signer = new ArweaveSigner(jwk);
-		const ant = ANT.init({ processId: ANT_PROCESS, signer });
+		const ant = ANT.init({ processId: arnsNameRecord.processId, signer });
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
 		await ant.setRecord(
@@ -93,7 +101,7 @@ export function getTagValue(list, name) {
 			}
 		);
 
-		console.log(`Deployed TxId [${manifestId}] to ANT [${ANT_PROCESS}] using undername [${argv.undername}]`);
+		console.log(`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`);
 	} catch (e) {
 		console.error('Deployment failed:', e);
 		process.exit(1); // Exit with error code

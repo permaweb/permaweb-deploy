@@ -28,11 +28,11 @@ To deploy your application, ensure you have a build script and a deployment scri
 ```json
 "scripts": {
     "build": "your-build-command",
-    "deploy-main": "npm run build && permaweb-deploy --ant-process <ANT_PROCESS>"
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME>"
 }
 ```
 
-Replace `<ANT_PROCESS>` with your actual ANT process.
+Replace `<ARNS_NAME>` with your ArNS name.
 
 ### GitHub Actions Workflow
 To automate the deployment, set up a GitHub Actions workflow as follows:
@@ -61,10 +61,10 @@ jobs:
 ### To deploy to permaweb manually via cli
 
 ```sh
-DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --ant-process <ANT_PROCESS>
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name <ARNS_NAME>
 ```
 
 ### Important Notes
 - **Security:** Always use a dedicated wallet for deployments to minimize risk.
 - **Wallet Key:** The wallet must be base64 encoded to be used in the deployment script.
-- **ANT Process:** The ANT process must be passed at runtime to associate your deployment with a specific ANT process on AO.
+- **ARNS Name:** The ArNS Name must be passed in so that the ANT Process can be resolved to update the target undername or root record.

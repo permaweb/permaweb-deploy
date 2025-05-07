@@ -7,7 +7,7 @@ import { Readable } from 'stream';
 // Gets MIME types for each file to tag the upload
 function getContentType(filePath) {
 	const res = mime.lookup(filePath);
-	return res ?? 'application/octet-stream';
+	return res || 'application/octet-stream';
 }
 
 export default async function TurboDeploy(argv, jwk) {

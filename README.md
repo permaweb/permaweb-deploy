@@ -34,6 +34,32 @@ To deploy your application, ensure you have a build script and a deployment scri
 
 Replace `<ARNS_NAME>` with your ArNS name.
 
+You can also specify testnet, mainnet, and custom process id's for the ARIO process to use.
+
+Maninnet (default) config:
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process mainnet"
+}
+```
+
+Testnet config:
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process testnet"
+}
+```
+
+Custom process ID config:
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process GaQrvEMKBpkjofgnBi_B3IgIDmY_XYelVLB6GcRGrHc"
+}
+```
+
 ### GitHub Actions Workflow
 To automate the deployment, set up a GitHub Actions workflow as follows:
 ```yaml

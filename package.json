@@ -1,6 +1,6 @@
 {
 	"name": "permaweb-deploy",
-	"version": "2.0.2",
+	"version": "2.1.0",
 	"description": "Permaweb app deployment package",
 	"main": "index.js",
 	"scripts": {
@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@ar.io/sdk": "^3.10.1",
 		"@ardrive/turbo-sdk": "^1.17.0",
+		"@permaweb/aoconnect": "^0.0.84",
 		"mime-types": "^2.1.35",
 		"yargs": "17.7.2"
 	},

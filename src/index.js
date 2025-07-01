@@ -36,6 +36,12 @@ const argv = yargs(hideBin(process.argv))
 		type: 'string',
 		description: 'ANT undername to update.',
 		default: '@',
+	})
+	.option('ttl', {
+		alias: 't',
+		type: 'number',
+		description: 'TTL in seconds for the ANT record (default: 60)',
+		default: 3600,
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
@@ -85,6 +91,11 @@ export function getTagValue(list, name) {
 		process.exit(1);
 	}
 
+	if (argv.ttl <= 0) {
+		console.error('TTL must be greater than 0');
+		process.exit(1);
+	}
+
 	if (!fs.existsSync(argv.deployFolder)) {
 		console.error(`deploy folder [${argv.deployFolder}] does not exist`);
 		process.exit(1);
@@ -114,7 +125,7 @@ export function getTagValue(list, name) {
 			{
 				undername: argv.undername,
 				transactionId: manifestId,
-				ttlSeconds: 3600,
+				ttlSeconds: argv.ttl,
 			},{
 				tags: [
 					{
@@ -129,7 +140,7 @@ export function getTagValue(list, name) {
 			}
 		);
 
-		console.log(`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`);
+		console.log(`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}] with TTL [${argv.ttl}s]`);
 	} catch (e) {
 		console.error('Deployment failed:', e);
 		process.exit(1); // Exit with error code

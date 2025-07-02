@@ -1,23 +1,27 @@
 #!/usr/bin/env node
 
 import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
+import { EthereumSigner, HexSolanaSigner, TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 import { connect } from '@permaweb/aoconnect';
 
-import TurboDeploy from './turbo';
-
 const arweaveTxIdRegex = /^[a-zA-Z0-9-_]{43}$/;
 
 const argv = yargs(hideBin(process.argv))
+	.version('2.1.0')
+	.help()
+	.usage('Usage: $0 --arns-name <name> [options]')
+	.example('$0 --arns-name my-app', 'Deploy to my-app.arweave.dev')
+	.example('$0 --arns-name my-app --undername staging', 'Deploy to staging.my-app.arweave.dev')
 	.option('ario-process', {
 		alias: 'p',
 		type: 'string',
 		description: 'The ARIO process to use',
 		demandOption: true,
-		default: ARIO_MAINNET_PROCESS_ID
+		default: ARIO_MAINNET_PROCESS_ID,
 	})
 	.option('arns-name', {
 		alias: 'n',
@@ -36,26 +40,34 @@ const argv = yargs(hideBin(process.argv))
 		type: 'string',
 		description: 'ANT undername to update.',
 		default: '@',
+	})
+	.option('ttl', {
+		alias: 't',
+		type: 'number',
+		description: 'TTL in seconds for the ANT record (60-86400).',
+		default: 3600,
+	})
+	.option('sig-type', {
+		alias: 's',
+		type: 'string',
+		description: 'The type of signer to be used for deployment.',
+		choices: ['arweave', 'ethereum', 'polygon', 'solana', 'kyve'],
+		default: 'arweave',
+	})
+	.check((argv) => {
+		if (argv.ttl < 60 || argv.ttl > 86400) {
+			throw new Error('TTL must be between 60 seconds (1 minute) and 86400 seconds (1 day)');
+		}
+		return true;
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
-const ARNS_NAME = argv.arnsName;
-let ARIO_PROCESS = argv.arioProcess;
+const ARNS_NAME = argv['arns-name'];
+let ARIO_PROCESS = argv['ario-process'];
 if (ARIO_PROCESS === 'mainnet') {
 	ARIO_PROCESS = ARIO_MAINNET_PROCESS_ID;
 } else if (ARIO_PROCESS === 'testnet') {
 	ARIO_PROCESS = ARIO_TESTNET_PROCESS_ID;
-}
-
-export function getTagValue(list, name) {
-	for (let i = 0; i < list.length; i++) {
-		if (list[i]) {
-			if (list[i].name === name) {
-				return list[i].value;
-			}
-		}
-	}
-	return STORAGE.none;
 }
 
 (async () => {
@@ -74,8 +86,7 @@ export function getTagValue(list, name) {
 		process.exit(1);
 	}
 
-
-	if (argv.deployFolder.length == 0) {
+	if (argv['deploy-folder'].length == 0) {
 		console.error('deploy folder must not be empty');
 		process.exit(1);
 	}
@@ -85,28 +96,81 @@ export function getTagValue(list, name) {
 		process.exit(1);
 	}
 
-	if (!fs.existsSync(argv.deployFolder)) {
-		console.error(`deploy folder [${argv.deployFolder}] does not exist`);
+	if (!fs.existsSync(argv['deploy-folder'])) {
+		console.error(`deploy folder [${argv['deploy-folder']}] does not exist`);
 		process.exit(1);
 	}
 
-	const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
-	const ario = ARIO.init({process: new AOProcess({
-		processId: ARIO_PROCESS,
-		ao: connect({
-			MODE: 'legacy',
-			CU_URL:"https://cu.ardrive.io"
-		})
-	})});
-	const arnsNameRecord = await ario.getArNSRecord({name: ARNS_NAME}).catch((e) => {
+	const ario = ARIO.init({
+		process: new AOProcess({
+			processId: ARIO_PROCESS,
+			ao: connect({
+				MODE: 'legacy',
+				CU_URL: 'https://cu.ardrive.io',
+			}),
+		}),
+	});
+	const arnsNameRecord = await ario.getArNSRecord({ name: ARNS_NAME }).catch((e) => {
 		console.error(`ARNS name [${ARNS_NAME}] does not exist`);
 		process.exit(1);
 	});
 
-
 	try {
-		const manifestId = await TurboDeploy(argv, jwk);
-		const signer = new ArweaveSigner(jwk);
+		let signer;
+		let token;
+
+		// Creates the proper signer based on the sig-type value
+		switch (argv['sig-type']) {
+			case 'ethereum':
+				signer = new EthereumSigner(DEPLOY_KEY);
+				token = 'ethereum';
+				break;
+			case 'polygon':
+				signer = new EthereumSigner(DEPLOY_KEY);
+				token = 'pol';
+				break;
+			case 'arweave':
+				const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+				signer = new ArweaveSigner(jwk);
+				token = 'arweave';
+				break;
+			case 'solana':
+				signer = new HexSolanaSigner(DEPLOY_KEY);
+				token = 'solana';
+				break;
+			case 'kyve':
+				signer = new EthereumSigner(DEPLOY_KEY);
+				token = 'kyve';
+				break;
+			default:
+				throw new Error(
+					`Invalid sig-type provided: ${argv['sig-type']}. Allowed values are 'arweave', 'ethereum', 'polygon', 'solana', or 'kyve'.`
+				);
+		}
+
+		const turbo = TurboFactory.authenticated({
+			signer: signer,
+			token: token,
+		});
+
+		const uploadResult = await turbo.uploadFolder({
+			folderPath: argv['deploy-folder'],
+			dataItemOpts: {
+				tags: [
+					{
+						name: 'App-Name',
+						value: 'Permaweb-Deploy',
+					},
+					// prevents identical transaction Ids from eth wallets
+					{
+						name: 'anchor',
+						value: new Date().toISOString(),
+					},
+				],
+			},
+		});
+
+		const manifestId = uploadResult.manifestResponse.id;
 		const ant = ANT.init({ processId: arnsNameRecord.processId, signer });
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
@@ -114,22 +178,29 @@ export function getTagValue(list, name) {
 			{
 				undername: argv.undername,
 				transactionId: manifestId,
-				ttlSeconds: 3600,
-			},{
+				ttlSeconds: argv.ttl,
+			},
+			{
 				tags: [
 					{
 						name: 'App-Name',
 						value: 'Permaweb-Deploy',
 					},
-					...(process.env.GITHUB_SHA ? [{
-						name: 'GIT-HASH',
-						value: process.env.GITHUB_SHA,
-					}] : []),
-				]
+					...(process.env.GITHUB_SHA
+						? [
+								{
+									name: 'GIT-HASH',
+									value: process.env.GITHUB_SHA,
+								},
+						  ]
+						: []),
+				],
 			}
 		);
 
-		console.log(`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`);
+		console.log(
+			`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`
+		);
 	} catch (e) {
 		console.error('Deployment failed:', e);
 		process.exit(1); // Exit with error code

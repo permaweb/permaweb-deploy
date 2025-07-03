@@ -40,9 +40,7 @@ Before using `permaweb-deploy`, you must:
 
 3. **For Ethereum/Polygon/KYVE signers:** Set your Ethereum private key directly as the `DEPLOY_KEY` (no base64 encoding needed).
 
-4. **For Solana signer:** Set your Solana private key in base58 format as the `DEPLOY_KEY`.
-
-5. Ensure that the secret name for the encoded wallet is `DEPLOY_KEY`.
+4. Ensure that the secret name for the encoded wallet is `DEPLOY_KEY`.
 
 ### Usage
 
@@ -61,7 +59,7 @@ Replace `<ARNS_NAME>` with your ArNS name.
 
 - `--undername` (or `-u`): Deploy to an undername on your ArNS name. Default: `@`
 - `--ttl` (or `-t`): TTL in seconds for the ANT record (60-86400). Default: `3600`
-- `--sig-type` (or `-s`): Signer type for deployment. Choices: `arweave`, `ethereum`, `polygon`, `solana`, `kyve`. Default: `arweave`
+- `--sig-type` (or `-s`): Signer type for deployment. Choices: `arweave`, `ethereum`, `polygon`, `kyve`. Default: `arweave`
 - `--ario-process` (or `-p`): ARIO process to use. Can be `mainnet`, `testnet`, or a custom process ID
 - `--deploy-folder` (or `-d`): Folder to deploy. Default: `./dist`
 - `--help`: Show all available options and usage examples
@@ -194,14 +192,6 @@ Deploy to undername with custom TTL and Polygon signer:
 }
 ```
 
-Deploy using Solana signer:
-
-```json
-"scripts": {
-    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --sig-type solana"
-}
-```
-
 Deploy using KYVE signer:
 
 ```json
@@ -266,12 +256,6 @@ Using Ethereum signer (DEPLOY_KEY should be your Ethereum private key):
 DEPLOY_KEY=<ETH_PRIVATE_KEY> npx permaweb-deploy --arns-name <ARNS_NAME> --sig-type ethereum
 ```
 
-Using Solana signer (DEPLOY_KEY should be your Solana private key in base58 format):
-
-```sh
-DEPLOY_KEY=<SOLANA_PRIVATE_KEY_BASE58> npx permaweb-deploy --arns-name <ARNS_NAME> --sig-type solana
-```
-
 Using KYVE signer (DEPLOY_KEY should be your KYVE private key):
 
 ```sh
@@ -296,8 +280,7 @@ DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name <ARNS_NAME> 
 
   - For Arweave signer: The wallet must be base64 encoded
   - For Ethereum/Polygon/KYVE signers: Use the raw private key (no encoding needed)
-  - For Solana signer: Use the private key in base58 format
 
 - **ARNS Name:** The ArNS Name must be passed in so that the ANT Process can be resolved to update the target undername or root record.
 
-- **Signer Types:** Choose the appropriate signer type (`arweave`, `ethereum`, `polygon`, `solana`, or `kyve`) based on your wallet and payment preference for Turbo uploads.
+- **Signer Types:** Choose the appropriate signer type (`arweave`, `ethereum`, `polygon`, or `kyve`) based on your wallet and payment preference for Turbo uploads.

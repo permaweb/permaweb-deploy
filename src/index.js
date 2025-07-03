@@ -51,7 +51,9 @@ const argv = yargs(hideBin(process.argv))
 		alias: 's',
 		type: 'string',
 		description: 'The type of signer to be used for deployment.',
-		choices: ['arweave', 'ethereum', 'polygon', 'solana', 'kyve'],
+		choices: ['arweave', 'ethereum', 'polygon', 
+			// 'solana',
+			 'kyve'],
 		default: 'arweave',
 	})
 	.check((argv) => {
@@ -134,17 +136,17 @@ if (ARIO_PROCESS === 'mainnet') {
 				signer = new ArweaveSigner(jwk);
 				token = 'arweave';
 				break;
-			case 'solana':
-				signer = new HexSolanaSigner(DEPLOY_KEY);
-				token = 'solana';
-				break;
+			// case 'solana':
+			// 	signer = new HexSolanaSigner(DEPLOY_KEY);
+			// 	token = 'solana';
+			// 	break;
 			case 'kyve':
 				signer = new EthereumSigner(DEPLOY_KEY);
 				token = 'kyve';
 				break;
 			default:
 				throw new Error(
-					`Invalid sig-type provided: ${argv['sig-type']}. Allowed values are 'arweave', 'ethereum', 'polygon', 'solana', or 'kyve'.`
+					`Invalid sig-type provided: ${argv['sig-type']}. Allowed values are 'arweave', 'ethereum', 'polygon', or 'kyve'.`
 				);
 		}
 

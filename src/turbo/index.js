@@ -5,8 +5,9 @@ import path from 'path';
 import { Readable } from 'stream';
 
 // Gets MIME types for each file to tag the upload
-async function getContentType(filePath) {
-	return mime.lookup(filePath);
+function getContentType(filePath) {
+	const res = mime.lookup(filePath);
+	return res || 'application/octet-stream';
 }
 
 export default async function TurboDeploy(argv, jwk) {
@@ -37,7 +38,7 @@ export default async function TurboDeploy(argv, jwk) {
 					console.log(`Uploading file: ${relativePath}`);
 					try {
 						const fileSize = fs.statSync(filePath).size;
-						const contentType = await getContentType(filePath);
+						const contentType = getContentType(filePath);
 						const uploadResult = await turbo.uploadFile({
 							fileStreamFactory: () => fs.createReadStream(filePath),
 							fileSizeFactory: () => fileSize,

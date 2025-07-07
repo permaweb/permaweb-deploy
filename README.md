@@ -9,9 +9,12 @@ Inspired by the [cookbook github action deployment guide](https://cookbook.arwea
 - **Automated Workflow:** Integrates with GitHub Actions for continuous deployment
 - **Git Hash Tagging:** Automatically tags deployments with Git commit hashes
 - **404 Fallback Detection:** Automatically detects and sets 404.html as fallback
+- **Network Support:** Supports mainnet, testnet, and custom ARIO process IDs
 
 ### Installation
+
 Install the package using npm:
+
 ```bash
 npm install permaweb-deploy
 ```
@@ -27,9 +30,10 @@ yarn add permaweb-deploy --dev --ignore-engines
 ```
 
 ### Prerequisites
+
 Before using `permaweb-deploy`, you must:
 1. **Arweave Wallet:** Have an Arweave wallet with Turbo Credits for uploading
-2. **ANT Process:** Own or control an ANT (Arweave Name Token) process
+2. **ArNS Name:** Own or control an ArNS name (which has an associated ANT process)
 3. **Wallet Encoding:** Encode your Arweave wallet key in base64 format:
    ```bash
    base64 -i wallet.json | pbcopy
@@ -45,26 +49,57 @@ permaweb-deploy [options]
 
 | Option | Alias | Description | Default | Required |
 |--------|-------|-------------|---------|----------|
-| `--ant-process` | `-a` | ANT process ID for deployment | - | ✅ |
+| `--arns-name` | `-n` | ArNS name for deployment | - | ✅ |
+| `--ario-process` | `-p` | ARIO process ID or "mainnet"/"testnet" | `mainnet` | ❌ |
 | `--deploy-folder` | `-d` | Folder to deploy | `./dist` | ❌ |
 | `--undername` | `-u` | ANT undername to update | `@` | ❌ |
 
 ### Usage
+
 To deploy your application, ensure you have a build script and a deployment script in your `package.json`:
 
 ```json
 "scripts": {
     "build": "your-build-command",
-    "deploy-main": "npm run build && permaweb-deploy --ant-process <ANT_PROCESS>"
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME>"
 }
 ```
 
 **Example with custom options:**
 ```bash
-permaweb-deploy --ant-process "your-ant-process-id" --deploy-folder "./build" --undername "app"
+permaweb-deploy --arns-name "your-arns-name" --deploy-folder "./build" --undername "app"
 ```
 
-Replace `<ANT_PROCESS>` with your actual ANT process ID.
+Replace `<ARNS_NAME>` with your ArNS name. You can also specify testnet, mainnet, and custom process IDs for the ARIO process to use.
+
+**Mainnet (default) config:**
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process mainnet"
+}
+```
+
+**Testnet config:**
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process testnet"
+}
+```
+
+**Custom process ID config:**
+```json
+"scripts": {
+    "build": "your-build-command",
+    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process GaQrvEMKBpkjofgnBi_B3IgIDmY_XYelVLB6GcRGrHc"
+}
+```
+
+### Manual CLI Deployment
+```bash
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name <ARNS_NAME>
+```
 
 ### Technical Details
 - **Upload Service:** Uses Turbo SDK for fast, reliable file uploads to Arweave
@@ -73,9 +108,12 @@ Replace `<ANT_PROCESS>` with your actual ANT process ID.
 - **Upload Timeout:** 10-second timeout per file upload for reliability
 - **ArNS Record TTL:** Sets 3600 seconds (1 hour) TTL for ArNS records via ANT
 - **Deployment Tags:** Automatically adds `App-Name: Permaweb-Deploy` and Git hash tags
+- **Network Support:** Supports mainnet, testnet, and custom ARIO process IDs
 
 ### GitHub Actions Workflow
+
 To automate the deployment, set up a GitHub Actions workflow as follows:
+
 ```yaml
 name: publish
 
@@ -101,20 +139,22 @@ jobs:
 ### Security & Best Practices
 - **Dedicated Wallet:** Always use a dedicated wallet for deployments to minimize security risks
 - **Wallet Encoding:** The wallet must be base64 encoded to be used in the deployment script
-- **ANT Process:** The ANT process must be passed at runtime to associate your deployment with a specific ANT process on AO
+- **ArNS Name:** The ArNS Name must be passed so that the ANT Process can be resolved to update the target undername or root record
 - **Turbo Credits:** Ensure your wallet has sufficient Turbo Credits before deployment
 - **Secret Management:** Keep your `DEPLOY_KEY` secret secure and never commit it to your repository
 - **Build Security:** Always check your build for exposed environmental secrets before deployment, as data on Arweave is permanent
 
 ### Troubleshooting
-- **Error: "ANT_PROCESS not configured":** Ensure you're passing the `--ant-process` flag with a valid ANT process ID
+- **Error: "ARNS_NAME not configured":** Ensure you're passing the `--arns-name` flag with a valid ArNS name
 - **Error: "DEPLOY_KEY not configured":** Verify your base64 encoded wallet is set as the `DEPLOY_KEY` environment variable
 - **Error: "deploy folder does not exist":** Check that your build folder exists and the path is correct
+- **Error: "ARNS name does not exist":** Verify the ArNS name is correct and exists in the specified network
 - **Upload timeouts:** Files have a 10-second upload timeout. Large files may fail and require optimization
 - **Insufficient Turbo Credits:** Ensure your wallet has enough Turbo Credits for the deployment
 
 ### Dependencies
-- **@ar.io/sdk:** ^1.2.2 - For ANT operations and ArNS management
-- **@ardrive/turbo-sdk:** ^1.9.0 - For fast file uploads to Arweave
+- **@ar.io/sdk:** ^3.10.1 - For ANT operations and ArNS management
+- **@ardrive/turbo-sdk:** ^1.17.0 - For fast file uploads to Arweave
+- **@permaweb/aoconnect:** ^0.0.84 - For AO network connectivity
 - **mime-types:** ^2.1.35 - For automatic content type detection
 - **yargs:** 17.7.2 - For CLI argument parsing

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
-import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
+import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
+import { TurboFactory } from '@ardrive/turbo-sdk';
 import { connect } from '@permaweb/aoconnect';
 
-import TurboDeploy from './turbo';
+import { uploadDirectory, uploadFile } from './turbo';
 
 const arweaveTxIdRegex = /^[a-zA-Z0-9-_]{43}$/;
 
@@ -31,6 +32,11 @@ const argv = yargs(hideBin(process.argv))
 		description: 'Folder to deploy.',
 		default: './dist',
 	})
+	.option('deploy-file', {
+		alias: 'f',
+		type: 'string',
+		description: 'File to deploy.'
+	})
 	.option('undername', {
 		alias: 'u',
 		type: 'string',
@@ -45,17 +51,6 @@ if (ARIO_PROCESS === 'mainnet') {
 	ARIO_PROCESS = ARIO_MAINNET_PROCESS_ID;
 } else if (ARIO_PROCESS === 'testnet') {
 	ARIO_PROCESS = ARIO_TESTNET_PROCESS_ID;
-}
-
-export function getTagValue(list, name) {
-	for (let i = 0; i < list.length; i++) {
-		if (list[i]) {
-			if (list[i].name === name) {
-				return list[i].value;
-			}
-		}
-	}
-	return STORAGE.none;
 }
 
 (async () => {
@@ -74,38 +69,48 @@ export function getTagValue(list, name) {
 		process.exit(1);
 	}
 
-
-	if (argv.deployFolder.length == 0) {
-		console.error('deploy folder must not be empty');
+	if (argv.deployFile && !fs.existsSync(argv.deployFile)) {
+		console.error(`deploy-file [${argv.deployFolder}] does not exist`);
 		process.exit(1);
 	}
-
-	if (argv.undername.length == 0) {
-		console.error('undername must not be empty');
-		process.exit(1);
+	else {
+		if (!fs.existsSync(argv.deployFolder)) {
+			console.error(`deploy-folder [${argv.deployFolder}] does not exist`);
+			process.exit(1);
+		}
 	}
 
-	if (!fs.existsSync(argv.deployFolder)) {
-		console.error(`deploy folder [${argv.deployFolder}] does not exist`);
+	if (argv.undername.length === 0) {
+		console.error('undername must be set');
 		process.exit(1);
 	}
 
 	const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
-	const ario = ARIO.init({process: new AOProcess({
-		processId: ARIO_PROCESS,
-		ao: connect({
-			MODE: 'legacy',
-			CU_URL:"https://cu.ardrive.io"
+	const ario = ARIO.init({
+		process: new AOProcess({
+			processId: ARIO_PROCESS,
+			ao: connect({
+				MODE: 'legacy',
+				CU_URL: 'https://cu.ardrive.io'
+			})
 		})
-	})});
-	const arnsNameRecord = await ario.getArNSRecord({name: ARNS_NAME}).catch((e) => {
+	});
+
+	const arnsNameRecord = await ario.getArNSRecord({ name: ARNS_NAME }).catch((e) => {
 		console.error(`ARNS name [${ARNS_NAME}] does not exist`);
 		process.exit(1);
 	});
 
-
 	try {
-		const manifestId = await TurboDeploy(argv, jwk);
+		let txId;
+		if (argv.deployFile) {
+			const turbo = TurboFactory.authenticated({ privateKey: jwk });
+			txId = (await uploadFile(argv.deployFile, turbo)).id;
+		}
+		else {
+			txId = await uploadDirectory(argv, jwk);
+		}
+
 		const signer = new ArweaveSigner(jwk);
 		const ant = ANT.init({ processId: arnsNameRecord.processId, signer });
 
@@ -113,9 +118,10 @@ export function getTagValue(list, name) {
 		await ant.setRecord(
 			{
 				undername: argv.undername,
-				transactionId: manifestId,
+				transactionId: txId,
 				ttlSeconds: 3600,
-			},{
+			},
+			{
 				tags: [
 					{
 						name: 'App-Name',
@@ -129,7 +135,7 @@ export function getTagValue(list, name) {
 			}
 		);
 
-		console.log(`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`);
+		console.log(`Deployed TxId [${txId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`);
 	} catch (e) {
 		console.error('Deployment failed:', e);
 		process.exit(1); // Exit with error code

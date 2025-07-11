@@ -1,4 +1,4 @@
-# Permaweb deployment package
+# Permaweb Deployment Package
 
 Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of web applications to the permaweb using Arweave. It simplifies the process by uploading your build folder, creating Arweave manifests, and updating ArNS (Arweave Name Service) records via ANT (Arweave Name Token) with the transaction ID.
 
@@ -147,14 +147,15 @@ jobs:
 ### Troubleshooting
 - **Error: "ARNS_NAME not configured":** Ensure you're passing the `--arns-name` flag with a valid ArNS name
 - **Error: "DEPLOY_KEY not configured":** Verify your base64 encoded wallet is set as the `DEPLOY_KEY` environment variable
-- **Error: "deploy folder does not exist":** Check that your build folder exists and the path is correct
+- **Error: "deploy-folder does not exist":** Check that your build folder exists and the path is correct
+- **Error: "deploy-file does not exist":** Check that your build file exists and the path is correct
 - **Error: "ARNS name does not exist":** Verify the ArNS name is correct and exists in the specified network
 - **Upload timeouts:** Files have a 10-second upload timeout. Large files may fail and require optimization
 - **Insufficient Turbo Credits:** Ensure your wallet has enough Turbo Credits for the deployment
 
 ### Dependencies
-- **@ar.io/sdk:** ^3.10.1 - For ANT operations and ArNS management
-- **@ardrive/turbo-sdk:** ^1.17.0 - For fast file uploads to Arweave
-- **@permaweb/aoconnect:** ^0.0.84 - For AO network connectivity
-- **mime-types:** ^2.1.35 - For automatic content type detection
-- **yargs:** 17.7.2 - For CLI argument parsing
+- **@ar.io/sdk:** - For ANT operations and ArNS management
+- **@ardrive/turbo-sdk:** - For fast file uploads to Arweave
+- **@permaweb/aoconnect:** - For AO network connectivity
+- **mime-types:** - For automatic content type detection
+- **yargs:** - For CLI argument parsing

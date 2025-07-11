@@ -1,8 +1,9 @@
-import { TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import mime from 'mime-types';
 import path from 'path';
 import { Readable } from 'stream';
+
+import { TurboFactory } from '@ardrive/turbo-sdk';
 
 // Gets MIME types for each file to tag the upload
 function getContentType(filePath) {
@@ -10,11 +11,37 @@ function getContentType(filePath) {
 	return res || 'application/octet-stream';
 }
 
-export default async function TurboDeploy(argv, jwk) {
+export async function uploadFile(path, turbo) {
+	console.log(`Uploading file: ${path}...`);
+	try {
+		const fileSize = fs.statSync(path).size;
+		const contentType = getContentType(path);
+		const uploadResult = await turbo.uploadFile({
+			fileStreamFactory: () => fs.createReadStream(path),
+			fileSizeFactory: () => fileSize,
+			signal: AbortSignal.timeout(10_000), // Cancel the upload after 10 seconds
+			dataItemOpts: {
+				tags: [
+					{ name: 'Content-Type', value: contentType },
+					{ name: 'App-Name', value: 'Permaweb-Deploy' },
+				],
+			},
+		});
+
+		console.log(`Uploaded ${path} with id:`, uploadResult.id);
+
+		return uploadResult;
+	} catch (err) {
+		console.error(`Error uploading file ${path}:`, err);
+	}
+}
+
+export async function uploadDirectory(argv, jwk) {
 	const turbo = TurboFactory.authenticated({ privateKey: jwk });
 
 	const deployFolder = argv.deployFolder;
-	//Uses Arweave manifest version 0.2.0, which supports fallbacks
+	
+	// Uses Arweave manifest version 0.2.0, which supports fallbacks
 	let newManifest = {
 		manifest: 'arweave/paths',
 		version: '0.2.0',
@@ -32,35 +59,17 @@ export default async function TurboDeploy(argv, jwk) {
 				const relativePath = path.relative(deployFolder, filePath);
 
 				if (fs.statSync(filePath).isDirectory()) {
-					// recursively process all files in a directory
+					// Recursively process all files in a directory
 					await processFiles(filePath);
 				} else {
-					console.log(`Uploading file: ${relativePath}`);
-					try {
-						const fileSize = fs.statSync(filePath).size;
-						const contentType = getContentType(filePath);
-						const uploadResult = await turbo.uploadFile({
-							fileStreamFactory: () => fs.createReadStream(filePath),
-							fileSizeFactory: () => fileSize,
-							signal: AbortSignal.timeout(10_000), // cancel the upload after 10 seconds
-							dataItemOpts: {
-								tags: [
-									{ name: 'Content-Type', value: contentType },
-									{ name: 'App-Name', value: 'Permaweb-Deploy' },
-								],
-							},
-						});
+					const uploadResult = await uploadFile(filePath, turbo);
 
-						console.log(`Uploaded ${relativePath} with id:`, uploadResult.id);
-						// adds uploaded file txId to the new manifest json
-						newManifest.paths[relativePath] = { id: uploadResult.id };
+					// Adds uploaded file txId to the new manifest json
+					newManifest.paths[relativePath] = { id: uploadResult.id };
 
-						if (file === '404.html') {
-							// sets manifest fallback to 404.html if found
-							newManifest.fallback.id = uploadResult.id;
-						}
-					} catch (err) {
-						console.error(`Error uploading file ${relativePath}:`, err);
+					if (file === '404.html') {
+						// Sets manifest fallback to 404.html if found
+						newManifest.fallback.id = uploadResult.id;
 					}
 				}
 			} catch (err) {
@@ -96,11 +105,11 @@ export default async function TurboDeploy(argv, jwk) {
 		}
 	}
 
-	// starts processing files in the selected directory
+	// Starts processing files in the selected directory
 	await processFiles(deployFolder);
 
 	if (!newManifest.fallback.id) {
-		// if no 404.html file is found, manifest fallback is set to the txId of index.html
+		// If no 404.html file is found, manifest fallback is set to the txId of index.html
 		newManifest.fallback.id = newManifest.paths['index.html'].id;
 	}
 

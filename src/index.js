@@ -37,6 +37,12 @@ const argv = yargs(hideBin(process.argv))
 		type: 'string',
 		description: 'File to deploy.'
 	})
+	.option('ttl-seconds', {
+		alias: 't',
+		type: 'number',
+		description: 'ArNS TTL Seconds',
+		default: 3600
+	})
 	.option('undername', {
 		alias: 'u',
 		type: 'string',
@@ -46,6 +52,7 @@ const argv = yargs(hideBin(process.argv))
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
 const ARNS_NAME = argv.arnsName;
+const TTL_SECONDS = argv.ttlSeconds;
 let ARIO_PROCESS = argv.arioProcess;
 if (ARIO_PROCESS === 'mainnet') {
 	ARIO_PROCESS = ARIO_MAINNET_PROCESS_ID;
@@ -66,6 +73,11 @@ if (ARIO_PROCESS === 'mainnet') {
 
 	if (!ARNS_NAME) {
 		console.error('ARNS_NAME not configured');
+		process.exit(1);
+	}
+
+	if (!Number.isFinite(TTL_SECONDS) || TTL_SECONDS < 60 || TTL_SECONDS > 86400) {
+		console.error('TTL_SECONDS must be a number between 60 and 86400 seconds');
 		process.exit(1);
 	}
 
@@ -111,6 +123,15 @@ if (ARIO_PROCESS === 'mainnet') {
 			txId = await uploadDirectory(argv, jwk);
 		}
 
+		console.log('-------------------- DEPLOY DETAILS --------------------');
+		console.log(`Tx ID: ${txId}`);
+		console.log(`ArNS Name: ${ARNS_NAME}`);
+		console.log(`Undername: ${argv.undername}`);
+		console.log(`ANT: ${arnsNameRecord.processId}`);
+		console.log(`AR IO Process: ${ARIO_PROCESS}`);
+		console.log(`TTL Seconds: ${TTL_SECONDS}`);
+		console.log('--------------------------------------------------------');
+
 		const signer = new ArweaveSigner(jwk);
 		const ant = ANT.init({ processId: arnsNameRecord.processId, signer });
 
@@ -119,7 +140,7 @@ if (ARIO_PROCESS === 'mainnet') {
 			{
 				undername: argv.undername,
 				transactionId: txId,
-				ttlSeconds: 3600,
+				ttlSeconds: TTL_SECONDS,
 			},
 			{
 				tags: [

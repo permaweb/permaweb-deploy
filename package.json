@@ -1,6 +1,6 @@
 {
 	"name": "permaweb-deploy",
-	"version": "2.2.0",
+	"version": "2.3.0",
 	"description": "Permaweb App Deployment Package",
 	"main": "index.js",
 	"scripts": {

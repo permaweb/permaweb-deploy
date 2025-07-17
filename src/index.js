@@ -168,7 +168,7 @@ if (ARIO_PROCESS === 'mainnet') {
 		});
 
 		let uploadResult;
-		let manifestId;
+		let txOrManifestId;
 		if (argv['deploy-file']) {
 			uploadResult = await turbo.uploadFile({
 				file: argv['deploy-file'],
@@ -186,7 +186,7 @@ if (ARIO_PROCESS === 'mainnet') {
 					],
 				},
 			});
-			manifestId = uploadResult.id;
+			txOrManifestId = uploadResult.id;
 		} else {
 			uploadResult = await turbo.uploadFolder({
 				folderPath: argv['deploy-folder'],
@@ -204,12 +204,12 @@ if (ARIO_PROCESS === 'mainnet') {
 					],
 				},
 			});
-		manifestId = uploadResult.manifestResponse.id;
+			txOrManifestId = uploadResult.manifestResponse.id;
 		}
 
 
 		console.log('-------------------- DEPLOY DETAILS --------------------');
-		console.log(`Tx ID: ${manifestId}`);
+		console.log(`Tx ID: ${txOrManifestId}`);
 		console.log(`ArNS Name: ${ARNS_NAME}`);
 		console.log(`Undername: ${argv.undername}`);
 		console.log(`ANT: ${arnsNameRecord.processId}`);
@@ -223,7 +223,7 @@ if (ARIO_PROCESS === 'mainnet') {
 		await ant.setRecord(
 			{
 				undername: argv.undername,
-				transactionId: manifestId,
+				transactionId: txOrManifestId,
 				ttlSeconds: argv['ttl-seconds'],
 			},
 			{
@@ -245,7 +245,7 @@ if (ARIO_PROCESS === 'mainnet') {
 		);
 
 		console.log(
-			`Deployed TxId [${manifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`
+			`Deployed TxId [${txOrManifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`
 		);
 	} catch (e) {
 		console.error('Deployment failed:', e);

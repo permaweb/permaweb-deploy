@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-
-import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
-import { EthereumSigner, HexSolanaSigner, TurboFactory } from '@ardrive/turbo-sdk';
+import { EthereumSigner, TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
+import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
+import { TurboFactory } from '@ardrive/turbo-sdk';
 import { connect } from '@permaweb/aoconnect';
 
 const arweaveTxIdRegex = /^[a-zA-Z0-9-_]{43}$/;
@@ -35,17 +35,22 @@ const argv = yargs(hideBin(process.argv))
 		description: 'Folder to deploy.',
 		default: './dist',
 	})
+	.option('deploy-file', {
+		alias: 'f',
+		type: 'string',
+		description: 'File to deploy.'
+	})
+	.option('ttl-seconds', {
+		alias: 't',
+		type: 'number',
+		description: 'ArNS TTL Seconds',
+		default: 3600
+	})
 	.option('undername', {
 		alias: 'u',
 		type: 'string',
 		description: 'ANT undername to update.',
 		default: '@',
-	})
-	.option('ttl', {
-		alias: 't',
-		type: 'number',
-		description: 'TTL in seconds for the ANT record (60-86400).',
-		default: 3600,
 	})
 	.option('sig-type', {
 		alias: 's',
@@ -66,6 +71,8 @@ const argv = yargs(hideBin(process.argv))
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
 const ARNS_NAME = argv['arns-name'];
 let ARIO_PROCESS = argv['ario-process'];
+const TTL_SECONDS = argv['ttl-seconds'];
+
 if (ARIO_PROCESS === 'mainnet') {
 	ARIO_PROCESS = ARIO_MAINNET_PROCESS_ID;
 } else if (ARIO_PROCESS === 'testnet') {
@@ -88,18 +95,24 @@ if (ARIO_PROCESS === 'mainnet') {
 		process.exit(1);
 	}
 
-	if (argv['deploy-folder'].length == 0) {
-		console.error('deploy folder must not be empty');
+	if (!Number.isFinite(TTL_SECONDS) || TTL_SECONDS < 60 || TTL_SECONDS > 86400) {
+		console.error('TTL_SECONDS must be a number between 60 and 86400 seconds');
 		process.exit(1);
 	}
 
-	if (argv.undername.length == 0) {
-		console.error('undername must not be empty');
+	if (argv.deployFile && !fs.existsSync(argv.deployFile)) {
+		console.error(`deploy-file [${argv.deployFolder}] does not exist`);
 		process.exit(1);
 	}
+	else {
+		if (!fs.existsSync(argv.deployFolder)) {
+			console.error(`deploy-folder [${argv.deployFolder}] does not exist`);
+			process.exit(1);
+		}
+	}
 
-	if (!fs.existsSync(argv['deploy-folder'])) {
-		console.error(`deploy folder [${argv['deploy-folder']}] does not exist`);
+	if (argv.undername.length === 0) {
+		console.error('undername must be set');
 		process.exit(1);
 	}
 
@@ -108,16 +121,18 @@ if (ARIO_PROCESS === 'mainnet') {
 			processId: ARIO_PROCESS,
 			ao: connect({
 				MODE: 'legacy',
-				CU_URL: 'https://cu.ardrive.io',
-			}),
-		}),
+				CU_URL: 'https://cu.ardrive.io'
+			})
+		})
 	});
+
 	const arnsNameRecord = await ario.getArNSRecord({ name: ARNS_NAME }).catch((e) => {
 		console.error(`ARNS name [${ARNS_NAME}] does not exist`);
 		process.exit(1);
 	});
 
 	try {
+
 		let signer;
 		let token;
 
@@ -136,10 +151,6 @@ if (ARIO_PROCESS === 'mainnet') {
 				signer = new ArweaveSigner(jwk);
 				token = 'arweave';
 				break;
-			// case 'solana':
-			// 	signer = new HexSolanaSigner(DEPLOY_KEY);
-			// 	token = 'solana';
-			// 	break;
 			case 'kyve':
 				signer = new EthereumSigner(DEPLOY_KEY);
 				token = 'kyve';
@@ -155,7 +166,28 @@ if (ARIO_PROCESS === 'mainnet') {
 			token: token,
 		});
 
-		const uploadResult = await turbo.uploadFolder({
+		let uploadResult;
+        if (argv['deploy-file']) {
+            uploadResult = await turbo.uploadFile({
+                filePath: argv['deploy-file'],
+				dataItemOpts: {
+					tags: [
+						{
+							name: 'App-Name',
+							value: 'Permaweb-Deploy',
+						},
+						// prevents identical transaction Ids from eth wallets
+						{
+							name: 'anchor',
+							value: new Date().toISOString(),
+						},
+					],
+				},
+            });
+        }
+        else {
+            
+		uploadResult = await turbo.uploadFolder({
 			folderPath: argv['deploy-folder'],
 			dataItemOpts: {
 				tags: [
@@ -171,8 +203,20 @@ if (ARIO_PROCESS === 'mainnet') {
 				],
 			},
 		});
-
+	}
 		const manifestId = uploadResult.manifestResponse.id;
+
+
+
+		console.log('-------------------- DEPLOY DETAILS --------------------');
+		console.log(`Tx ID: ${manifestId}`);
+		console.log(`ArNS Name: ${ARNS_NAME}`);
+		console.log(`Undername: ${argv.undername}`);
+		console.log(`ANT: ${arnsNameRecord.processId}`);
+		console.log(`AR IO Process: ${ARIO_PROCESS}`);
+		console.log(`TTL Seconds: ${TTL_SECONDS}`);
+		console.log('--------------------------------------------------------');
+
 		const ant = ANT.init({ processId: arnsNameRecord.processId, signer });
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
@@ -180,7 +224,7 @@ if (ARIO_PROCESS === 'mainnet') {
 			{
 				undername: argv.undername,
 				transactionId: manifestId,
-				ttlSeconds: argv.ttl,
+				ttlSeconds: argv['ttl-seconds'],
 			},
 			{
 				tags: [

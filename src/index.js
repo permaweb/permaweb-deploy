@@ -3,6 +3,7 @@ import { EthereumSigner, TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import mime from 'mime-types';
 
 import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
 import { connect } from '@permaweb/aoconnect';
@@ -170,6 +171,9 @@ if (ARIO_PROCESS === 'mainnet') {
 		let uploadResult;
 		let txOrManifestId;
 		if (argv['deploy-file']) {
+			// Detect MIME type for the file
+			const mimeType = mime.lookup(argv['deploy-file']) || 'application/octet-stream';
+
 			uploadResult = await turbo.uploadFile({
 				file: argv['deploy-file'],
 				dataItemOpts: {
@@ -182,6 +186,10 @@ if (ARIO_PROCESS === 'mainnet') {
 						{
 							name: 'anchor',
 							value: new Date().toISOString(),
+						},
+						{
+							name: 'Content-Type',
+							value: mimeType,
 						},
 					],
 				},
@@ -206,7 +214,6 @@ if (ARIO_PROCESS === 'mainnet') {
 			});
 			txOrManifestId = uploadResult.manifestResponse.id;
 		}
-
 
 		console.log('-------------------- DEPLOY DETAILS --------------------');
 		console.log(`Tx ID: ${txOrManifestId}`);

@@ -13,6 +13,7 @@
 		"@ar.io/sdk": "^3.10.1",
 		"@ardrive/turbo-sdk": "^1.28.2",
 		"@permaweb/aoconnect": "^0.0.85",
+		"mime-types": "^3.0.1",
 		"yargs": "17.7.2"
 	},
 	"devDependencies": {

@@ -5,7 +5,6 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
-import { TurboFactory } from '@ardrive/turbo-sdk';
 import { connect } from '@permaweb/aoconnect';
 
 const arweaveTxIdRegex = /^[a-zA-Z0-9-_]{43}$/;
@@ -38,13 +37,13 @@ const argv = yargs(hideBin(process.argv))
 	.option('deploy-file', {
 		alias: 'f',
 		type: 'string',
-		description: 'File to deploy.'
+		description: 'File to deploy.',
 	})
 	.option('ttl-seconds', {
 		alias: 't',
 		type: 'number',
 		description: 'ArNS TTL Seconds',
-		default: 3600
+		default: 3600,
 	})
 	.option('undername', {
 		alias: 'u',
@@ -56,9 +55,13 @@ const argv = yargs(hideBin(process.argv))
 		alias: 's',
 		type: 'string',
 		description: 'The type of signer to be used for deployment.',
-		choices: ['arweave', 'ethereum', 'polygon', 
+		choices: [
+			'arweave',
+			'ethereum',
+			'polygon',
 			// 'solana',
-			 'kyve'],
+			'kyve',
+		],
 		default: 'arweave',
 	})
 	.check((argv) => {
@@ -103,8 +106,7 @@ if (ARIO_PROCESS === 'mainnet') {
 	if (argv.deployFile && !fs.existsSync(argv.deployFile)) {
 		console.error(`deploy-file [${argv.deployFolder}] does not exist`);
 		process.exit(1);
-	}
-	else {
+	} else {
 		if (!fs.existsSync(argv.deployFolder)) {
 			console.error(`deploy-folder [${argv.deployFolder}] does not exist`);
 			process.exit(1);
@@ -121,9 +123,9 @@ if (ARIO_PROCESS === 'mainnet') {
 			processId: ARIO_PROCESS,
 			ao: connect({
 				MODE: 'legacy',
-				CU_URL: 'https://cu.ardrive.io'
-			})
-		})
+				CU_URL: 'https://cu.ardrive.io',
+			}),
+		}),
 	});
 
 	const arnsNameRecord = await ario.getArNSRecord({ name: ARNS_NAME }).catch((e) => {
@@ -132,7 +134,6 @@ if (ARIO_PROCESS === 'mainnet') {
 	});
 
 	try {
-
 		let signer;
 		let token;
 
@@ -167,9 +168,10 @@ if (ARIO_PROCESS === 'mainnet') {
 		});
 
 		let uploadResult;
-        if (argv['deploy-file']) {
-            uploadResult = await turbo.uploadFile({
-                filePath: argv['deploy-file'],
+		let manifestId;
+		if (argv['deploy-file']) {
+			uploadResult = await turbo.uploadFile({
+				file: argv['deploy-file'],
 				dataItemOpts: {
 					tags: [
 						{
@@ -183,29 +185,27 @@ if (ARIO_PROCESS === 'mainnet') {
 						},
 					],
 				},
-            });
-        }
-        else {
-            
-		uploadResult = await turbo.uploadFolder({
-			folderPath: argv['deploy-folder'],
-			dataItemOpts: {
-				tags: [
-					{
-						name: 'App-Name',
-						value: 'Permaweb-Deploy',
-					},
-					// prevents identical transaction Ids from eth wallets
-					{
-						name: 'anchor',
-						value: new Date().toISOString(),
-					},
-				],
-			},
-		});
-	}
-		const manifestId = uploadResult.manifestResponse.id;
-
+			});
+			manifestId = uploadResult.id;
+		} else {
+			uploadResult = await turbo.uploadFolder({
+				folderPath: argv['deploy-folder'],
+				dataItemOpts: {
+					tags: [
+						{
+							name: 'App-Name',
+							value: 'Permaweb-Deploy',
+						},
+						// prevents identical transaction Ids from eth wallets
+						{
+							name: 'anchor',
+							value: new Date().toISOString(),
+						},
+					],
+				},
+			});
+		manifestId = uploadResult.manifestResponse.id;
+		}
 
 
 		console.log('-------------------- DEPLOY DETAILS --------------------');

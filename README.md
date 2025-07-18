@@ -1,6 +1,6 @@
 # Permaweb Deployment Package
 
-Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of web applications to the permaweb using Arweave. It simplifies the process by uploading your build folder, creating Arweave manifests, and updating ArNS (Arweave Name Service) records via ANT (Arweave Name Token) with the transaction ID.
+Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of web applications to the permaweb using Arweave. It uploads your build folder or a single file, creates Arweave manifests, and updates ArNS (Arweave Name Service) records via ANT (Arweave Name Token) with the transaction ID.
 
 ### Features
 
@@ -11,6 +11,7 @@ Inspired by the [cookbook github action deployment guide](https://cookbook.arwea
 - **Git Hash Tagging:** Automatically tags deployments with Git commit hashes
 - **404 Fallback Detection:** Automatically detects and sets 404.html as fallback
 - **Network Support:** Supports mainnet, testnet, and custom ARIO process IDs
+- **Flexible Deployment:** Supports deploying a folder or a single file
 
 ### Installation
 
@@ -34,32 +35,17 @@ yarn add permaweb-deploy --dev --ignore-engines
 
 ### Prerequisites
 
-Before using `permaweb-deploy`, you must:
+1. **For Arweave signer (default):** Encode your Arweave wallet key in base64 format and set it as a GitHub secret:
 
-1. **Arweave Wallet:** Have an Arweave wallet with Turbo Credits for uploading
-2. **ArNS Name:** Own or control an ArNS name (which has an associated ANT process)
-3. **Wallet Encoding:** Encode your Arweave wallet key in base64 format:
    ```bash
    base64 -i wallet.json | pbcopy
    ```
-4. **GitHub Secret:** Set the encoded wallet as a GitHub secret named `DEPLOY_KEY`
+
+2. **For Ethereum/Polygon/KYVE signers:** Use your raw private key (no encoding needed) as the `DEPLOY_KEY`.
+
+3. Ensure that the secret name for the encoded wallet or private key is `DEPLOY_KEY`.
 
 ⚠️ **Important:** Use a dedicated wallet for deployments to minimize security risks. Ensure your wallet has sufficient Turbo Credits for uploads.
-
-### CLI Options
-
-```bash
-permaweb-deploy [options]
-```
-
-| Option            | Alias | Description                            | Default   | Required |
-| ----------------- | ----- | -------------------------------------- | --------- | -------- |
-| `--arns-name`     | `-n`  | ArNS name for deployment               | -         | ✅       |
-| `--ario-process`  | `-p`  | ARIO process ID or "mainnet"/"testnet" | `mainnet` | ❌       |
-| `--deploy-folder` | `-d`  | Folder to deploy                       | `./dist`  | ❌       |
-| `--deploy-file`   | `-f`  | File to deploy                         | `./dist`  | ❌       |
-| `--undername`     | `-u`  | ANT undername to update                | `@`       | ❌       |
-| `--ttl-seconds`   | `-t`  | ArNS TTL Seconds                       | `3600`    | ❌       |
 
 ### Usage
 
@@ -68,73 +54,107 @@ To deploy your application, ensure you have a build script and a deployment scri
 ```json
 "scripts": {
     "build": "your-build-command",
+    "deploy": "npm run build && permaweb-deploy --arns-name <ARNS_NAME>"
+}
+```
+
+Replace `<ARNS_NAME>` with your ArNS name. To deploy to an undername, add `--undername <UNDERNAME>`.
+
+#### CLI Options
+
+- `--arns-name, -n` (required): The ArNS name to update.
+- `--ario-process, -p`: ARIO process to use (`mainnet`, `testnet`, or a custom process ID). Default: mainnet.
+- `--deploy-folder, -d`: Folder to deploy. Default: `./dist`.
+- `--deploy-file, -f`: Deploy a single file instead of a folder.
+- `--undername, -u`: ANT undername to update. Default: `@`.
+- `--ttl-seconds, -t`: TTL in seconds for the ANT record (60-86400). Default: `3600`.
+- `--sig-type, -s`: Signer type for deployment. Choices: `arweave`, `ethereum`, `polygon`, `kyve`. Default: `arweave`.
+- `--help`: Show all available options and usage examples.
+- `--version`: Show the current version number.
+
+#### Example CLI Usage
+
+Deploy a folder (default):
+
+```sh
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name my-app
+```
+
+Deploy a specific folder:
+
+```sh
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name my-app --deploy-folder ./build
+```
+
+Deploy a single file:
+
+```sh
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name my-app --deploy-file ./path/to/file.txt
+```
+
+Deploy to an undername:
+
+```sh
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name my-app --undername staging
+```
+
+Deploy with a custom TTL:
+
+```sh
+DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name my-app --ttl-seconds 7200
+```
+
+Deploy using a different signer (e.g., Ethereum):
+
+```sh
+DEPLOY_KEY=<ETH_PRIVATE_KEY> npx permaweb-deploy --arns-name my-app --sig-type ethereum
+```
+
+#### Example `package.json` Scripts
+
+```json
+"scripts": {
+    "build": "vite build",
+    "deploy": "npm run build && permaweb-deploy --arns-name <ARNS_NAME>"
+}
+```
+
+#### ARIO Process Examples
+
+**Mainnet (default):**
+
+```json
+"scripts": {
     "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME>"
 }
 ```
 
-**Example with custom options:**
-
-```bash
-permaweb-deploy --arns-name "your-arns-name" --deploy-folder "./build" --undername "app"
-```
-
-Replace `<ARNS_NAME>` with your ArNS name. You can also specify testnet, mainnet, and custom process IDs for the ARIO process to use.
-
-**Mainnet (default) config:**
+**Testnet:**
 
 ```json
 "scripts": {
-    "build": "your-build-command",
-    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process mainnet"
+    "deploy-test": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process testnet"
 }
 ```
 
-**Testnet config:**
+**Custom process ID:**
 
 ```json
 "scripts": {
-    "build": "your-build-command",
-    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process testnet"
+    "deploy-custom": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process <PROCESS_ID>"
 }
 ```
-
-**Custom process ID config:**
-
-```json
-"scripts": {
-    "build": "your-build-command",
-    "deploy-main": "npm run build && permaweb-deploy --arns-name <ARNS_NAME> --ario-process GaQrvEMKBpkjofgnBi_B3IgIDmY_XYelVLB6GcRGrHc"
-}
-```
-
-### Manual CLI Deployment
-
-```bash
-DEPLOY_KEY=$(base64 -i wallet.json) npx permaweb-deploy --arns-name <ARNS_NAME>
-```
-
-### Technical Details
-
-- **Upload Service:** Uses Turbo SDK for fast, reliable file uploads to Arweave
-- **Manifest Format:** Creates Arweave manifests using version 0.2.0 specification
-- **Fallback Support:** Automatically detects `404.html` and sets it as fallback, otherwise uses `index.html`
-- **Upload Timeout:** 10-second timeout per file upload for reliability
-- **ArNS Record TTL:** Sets 3600 seconds (1 hour) TTL for ArNS records via ANT
-- **Deployment Tags:** Automatically adds `App-Name: Permaweb-Deploy` and Git hash tags
-- **Network Support:** Supports mainnet, testnet, and custom ARIO process IDs
 
 ### GitHub Actions Workflow
 
 To automate the deployment, set up a GitHub Actions workflow as follows:
 
 ```yaml
-name: publish
-
+name: Deploy to Permaweb
 on:
   push:
     branches:
-      - 'main'
-
+      - main
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -144,15 +164,16 @@ jobs:
         with:
           node-version: 20.x
       - run: npm install
-      - run: npm run deploy-main
+      - run: npm run deploy
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
 ```
 
+
 ### Security & Best Practices
 
 - **Dedicated Wallet:** Always use a dedicated wallet for deployments to minimize security risks
-- **Wallet Encoding:** The wallet must be base64 encoded to be used in the deployment script
+- **Wallet Encoding:** Arweave wallets must be base64 encoded to be used in the deployment script
 - **ArNS Name:** The ArNS Name must be passed so that the ANT Process can be resolved to update the target undername or root record
 - **Turbo Credits:** Ensure your wallet has sufficient Turbo Credits before deployment
 - **Secret Management:** Keep your `DEPLOY_KEY` secret secure and never commit it to your repository
@@ -173,5 +194,4 @@ jobs:
 - **@ar.io/sdk:** - For ANT operations and ArNS management
 - **@ardrive/turbo-sdk:** - For fast file uploads to Arweave
 - **@permaweb/aoconnect:** - For AO network connectivity
-- **mime-types:** - For automatic content type detection
 - **yargs:** - For CLI argument parsing

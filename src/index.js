@@ -1,24 +1,27 @@
 #!/usr/bin/env node
-
+import { EthereumSigner, TurboFactory } from '@ardrive/turbo-sdk';
 import fs from 'fs';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import mime from 'mime-types';
 
 import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
-import { TurboFactory } from '@ardrive/turbo-sdk';
 import { connect } from '@permaweb/aoconnect';
-
-import { uploadDirectory, uploadFile } from './turbo';
 
 const arweaveTxIdRegex = /^[a-zA-Z0-9-_]{43}$/;
 
 const argv = yargs(hideBin(process.argv))
+	.version('2.1.0')
+	.help()
+	.usage('Usage: $0 --arns-name <name> [options]')
+	.example('$0 --arns-name my-app', 'Deploy to my-app.arweave.dev')
+	.example('$0 --arns-name my-app --undername staging', 'Deploy to staging.my-app.arweave.dev')
 	.option('ario-process', {
 		alias: 'p',
 		type: 'string',
 		description: 'The ARIO process to use',
 		demandOption: true,
-		default: ARIO_MAINNET_PROCESS_ID
+		default: ARIO_MAINNET_PROCESS_ID,
 	})
 	.option('arns-name', {
 		alias: 'n',
@@ -35,25 +38,45 @@ const argv = yargs(hideBin(process.argv))
 	.option('deploy-file', {
 		alias: 'f',
 		type: 'string',
-		description: 'File to deploy.'
+		description: 'File to deploy.',
 	})
 	.option('ttl-seconds', {
 		alias: 't',
 		type: 'number',
 		description: 'ArNS TTL Seconds',
-		default: 3600
+		default: 3600,
 	})
 	.option('undername', {
 		alias: 'u',
 		type: 'string',
 		description: 'ANT undername to update.',
 		default: '@',
+	})
+	.option('sig-type', {
+		alias: 's',
+		type: 'string',
+		description: 'The type of signer to be used for deployment.',
+		choices: [
+			'arweave',
+			'ethereum',
+			'polygon',
+			// 'solana',
+			'kyve',
+		],
+		default: 'arweave',
+	})
+	.check((argv) => {
+		if (argv.ttl < 60 || argv.ttl > 86400) {
+			throw new Error('TTL must be between 60 seconds (1 minute) and 86400 seconds (1 day)');
+		}
+		return true;
 	}).argv;
 
 const DEPLOY_KEY = process.env.DEPLOY_KEY;
-const ARNS_NAME = argv.arnsName;
-const TTL_SECONDS = argv.ttlSeconds;
-let ARIO_PROCESS = argv.arioProcess;
+const ARNS_NAME = argv['arns-name'];
+let ARIO_PROCESS = argv['ario-process'];
+const TTL_SECONDS = argv['ttl-seconds'];
+
 if (ARIO_PROCESS === 'mainnet') {
 	ARIO_PROCESS = ARIO_MAINNET_PROCESS_ID;
 } else if (ARIO_PROCESS === 'testnet') {
@@ -84,8 +107,7 @@ if (ARIO_PROCESS === 'mainnet') {
 	if (argv.deployFile && !fs.existsSync(argv.deployFile)) {
 		console.error(`deploy-file [${argv.deployFolder}] does not exist`);
 		process.exit(1);
-	}
-	else {
+	} else {
 		if (!fs.existsSync(argv.deployFolder)) {
 			console.error(`deploy-folder [${argv.deployFolder}] does not exist`);
 			process.exit(1);
@@ -97,15 +119,14 @@ if (ARIO_PROCESS === 'mainnet') {
 		process.exit(1);
 	}
 
-	const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
 	const ario = ARIO.init({
 		process: new AOProcess({
 			processId: ARIO_PROCESS,
 			ao: connect({
 				MODE: 'legacy',
-				CU_URL: 'https://cu.ardrive.io'
-			})
-		})
+				CU_URL: 'https://cu.ardrive.io',
+			}),
+		}),
 	});
 
 	const arnsNameRecord = await ario.getArNSRecord({ name: ARNS_NAME }).catch((e) => {
@@ -114,17 +135,88 @@ if (ARIO_PROCESS === 'mainnet') {
 	});
 
 	try {
-		let txId;
-		if (argv.deployFile) {
-			const turbo = TurboFactory.authenticated({ privateKey: jwk });
-			txId = (await uploadFile(argv.deployFile, turbo)).id;
+		let signer;
+		let token;
+
+		// Creates the proper signer based on the sig-type value
+		switch (argv['sig-type']) {
+			case 'ethereum':
+				signer = new EthereumSigner(DEPLOY_KEY);
+				token = 'ethereum';
+				break;
+			case 'polygon':
+				signer = new EthereumSigner(DEPLOY_KEY);
+				token = 'pol';
+				break;
+			case 'arweave':
+				const jwk = JSON.parse(Buffer.from(DEPLOY_KEY, 'base64').toString('utf-8'));
+				signer = new ArweaveSigner(jwk);
+				token = 'arweave';
+				break;
+			case 'kyve':
+				signer = new EthereumSigner(DEPLOY_KEY);
+				token = 'kyve';
+				break;
+			default:
+				throw new Error(
+					`Invalid sig-type provided: ${argv['sig-type']}. Allowed values are 'arweave', 'ethereum', 'polygon', or 'kyve'.`
+				);
 		}
-		else {
-			txId = await uploadDirectory(argv, jwk);
+
+		const turbo = TurboFactory.authenticated({
+			signer: signer,
+			token: token,
+		});
+
+		let uploadResult;
+		let txOrManifestId;
+		if (argv['deploy-file']) {
+			// Detect MIME type for the file
+			const mimeType = mime.lookup(argv['deploy-file']) || 'application/octet-stream';
+
+			uploadResult = await turbo.uploadFile({
+				file: argv['deploy-file'],
+				dataItemOpts: {
+					tags: [
+						{
+							name: 'App-Name',
+							value: 'Permaweb-Deploy',
+						},
+						// prevents identical transaction Ids from eth wallets
+						{
+							name: 'anchor',
+							value: new Date().toISOString(),
+						},
+						{
+							name: 'Content-Type',
+							value: mimeType,
+						},
+					],
+				},
+			});
+			txOrManifestId = uploadResult.id;
+		} else {
+			uploadResult = await turbo.uploadFolder({
+				folderPath: argv['deploy-folder'],
+				dataItemOpts: {
+					tags: [
+						{
+							name: 'App-Name',
+							value: 'Permaweb-Deploy',
+						},
+						// prevents identical transaction Ids from eth wallets
+						{
+							name: 'anchor',
+							value: new Date().toISOString(),
+						},
+					],
+				},
+			});
+			txOrManifestId = uploadResult.manifestResponse.id;
 		}
 
 		console.log('-------------------- DEPLOY DETAILS --------------------');
-		console.log(`Tx ID: ${txId}`);
+		console.log(`Tx ID: ${txOrManifestId}`);
 		console.log(`ArNS Name: ${ARNS_NAME}`);
 		console.log(`Undername: ${argv.undername}`);
 		console.log(`ANT: ${arnsNameRecord.processId}`);
@@ -132,15 +224,14 @@ if (ARIO_PROCESS === 'mainnet') {
 		console.log(`TTL Seconds: ${TTL_SECONDS}`);
 		console.log('--------------------------------------------------------');
 
-		const signer = new ArweaveSigner(jwk);
 		const ant = ANT.init({ processId: arnsNameRecord.processId, signer });
 
 		// Update the ANT record (assumes the JWK is a controller or owner)
 		await ant.setRecord(
 			{
 				undername: argv.undername,
-				transactionId: txId,
-				ttlSeconds: TTL_SECONDS,
+				transactionId: txOrManifestId,
+				ttlSeconds: argv['ttl-seconds'],
 			},
 			{
 				tags: [
@@ -148,15 +239,21 @@ if (ARIO_PROCESS === 'mainnet') {
 						name: 'App-Name',
 						value: 'Permaweb-Deploy',
 					},
-					...(process.env.GITHUB_SHA ? [{
-						name: 'GIT-HASH',
-						value: process.env.GITHUB_SHA,
-					}] : []),
-				]
+					...(process.env.GITHUB_SHA
+						? [
+								{
+									name: 'GIT-HASH',
+									value: process.env.GITHUB_SHA,
+								},
+						  ]
+						: []),
+				],
 			}
 		);
 
-		console.log(`Deployed TxId [${txId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`);
+		console.log(
+			`Deployed TxId [${txOrManifestId}] to name [${ARNS_NAME}] for ANT [${arnsNameRecord.processId}] using undername [${argv.undername}]`
+		);
 	} catch (e) {
 		console.error('Deployment failed:', e);
 		process.exit(1); // Exit with error code

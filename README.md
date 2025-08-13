@@ -67,7 +67,7 @@ Replace `<ARNS_NAME>` with your ArNS name. To deploy to an undername, add `--und
 - `--deploy-folder, -d`: Folder to deploy. Default: `./dist`.
 - `--deploy-file, -f`: Deploy a single file instead of a folder.
 - `--undername, -u`: ANT undername to update. Default: `@`.
-- `--ttl-seconds, -t`: TTL in seconds for the ANT record (60-86400). Default: `3600`.
+- `--ttl-seconds, -t`: TTL in seconds for the ANT record (60-86400). Default: `60`.
 - `--sig-type, -s`: Signer type for deployment. Choices: `arweave`, `ethereum`, `polygon`, `kyve`. Default: `arweave`.
 - `--help`: Show all available options and usage examples.
 - `--version`: Show the current version number.

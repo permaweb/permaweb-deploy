@@ -7,6 +7,7 @@ import mime from 'mime-types';
 
 import { ANT, AOProcess, ARIO, ARIO_MAINNET_PROCESS_ID, ARIO_TESTNET_PROCESS_ID, ArweaveSigner } from '@ar.io/sdk';
 import { connect } from '@permaweb/aoconnect';
+import { Readable } from 'node:stream';
 
 const arweaveTxIdRegex = /^[a-zA-Z0-9-_]{43}$/;
 
@@ -212,7 +213,32 @@ if (ARIO_PROCESS === 'mainnet') {
 					],
 				},
 			});
-			txOrManifestId = uploadResult.manifestResponse.id;
+			txOrManifestId = uploadResult.manifestResponse.id; //might replace now
+
+			// Make default folder paths work by adding extra path entries
+			const origPaths = uploadResult.manifest.paths;
+			const newPaths = {};
+			let replaceManifest = false;
+			for (const [key, value] of Object.entries(origPaths)) {
+				newPaths[key] = value;
+				if (key.endsWith('/index.html')) {
+					const newKey = key.replace(/\/index\.html$/, '');
+					newPaths[newKey] = value;
+					replaceManifest = true;
+				};
+			};
+			
+			if (replaceManifest) {
+				console.info('replacing manifest');
+				const newManifest = { ...uploadResult.manifest, paths: newPaths };
+				const buffer = Buffer.from(JSON.stringify(newManifest));
+				const { id } = await turbo.uploadFile({
+					fileStreamFactory: () => Readable.from(buffer),
+					fileSizeFactory: () => buffer.length,
+					dataItemOpts: { tags: [{ name: 'Content-Type', value: 'application/x.arweave-manifest+json' }] },
+				});
+				txOrManifestId = id;
+			}
 		}
 
 		console.log('-------------------- DEPLOY DETAILS --------------------');

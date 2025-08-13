@@ -45,7 +45,7 @@ const argv = yargs(hideBin(process.argv))
 		alias: 't',
 		type: 'number',
 		description: 'ArNS TTL Seconds',
-		default: 3600,
+		default: 60,
 	})
 	.option('undername', {
 		alias: 'u',

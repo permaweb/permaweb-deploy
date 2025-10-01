@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - alpha
+
+jobs:
+  ci:
+    name: ${{ matrix.task }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, format, build, test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ${{ matrix.task }}
+        run: |
+          case "${{ matrix.task }}" in
+            lint)
+              pnpm lint
+              ;;
+            format)
+              pnpm format:check
+              ;;
+            build)
+              pnpm build
+              ;;
+            test)
+              pnpm test:run
+              ;;
+          esac
+
+      - name: Slack Notification on Failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: permaweb-deploy
+          SLACK_COLOR: danger
+          SLACK_ICON_EMOJI: ":x:"
+          SLACK_TITLE: CI Failed - ${{ matrix.task }}
+          SLACK_MESSAGE: |
+            PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}
+            Author: ${{ github.event.pull_request.user.login }}
+            Failed Task: ${{ matrix.task }}
+          SLACK_FOOTER: "permaweb-deploy"
+          SLACK_USERNAME: GitHub Actions

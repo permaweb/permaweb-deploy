@@ -93,34 +93,3 @@ jobs:
               repo: context.repo.repo,
               body: `🚀 Snapshot release published: \`${pkg.name}@${version}\`\n\nInstall with:\n\`\`\`bash\npnpm add ${pkg.name}@${version}\n\`\`\``
             })
-
-      - name: Slack Notification on Success
-        if: success()
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_CHANNEL: permaweb-deploy
-          SLACK_COLOR: "#FFA500"
-          SLACK_ICON_EMOJI: ":test_tube:"
-          SLACK_TITLE: Snapshot Release Published
-          SLACK_MESSAGE: |
-            Version: ${{ steps.package-version.outputs.version }}
-            PR: #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
-            Author: ${{ github.event.pull_request.user.login }}
-          SLACK_FOOTER: "permaweb-deploy"
-          SLACK_USERNAME: GitHub Actions
-
-      - name: Slack Notification on Failure
-        if: failure()
-        uses: rtCamp/action-slack-notify@v2
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_CHANNEL: permaweb-deploy
-          SLACK_COLOR: danger
-          SLACK_ICON_EMOJI: ":x:"
-          SLACK_TITLE: Snapshot Release Failed
-          SLACK_MESSAGE: |
-            PR: #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
-            Author: ${{ github.event.pull_request.user.login }}
-          SLACK_FOOTER: "permaweb-deploy"
-          SLACK_USERNAME: GitHub Actions

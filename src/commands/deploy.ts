@@ -133,115 +133,115 @@ export default class Deploy extends Command {
         // Initialize ARIO
         const spinner = ora('Initializing ARIO').start()
 
-      const ario = ARIO.init({
-        process: new AOProcess({
-          ao: connect({
-            CU_URL: 'https://cu.ardrive.io',
-            MODE: 'legacy',
+        const ario = ARIO.init({
+          process: new AOProcess({
+            ao: connect({
+              CU_URL: 'https://cu.ardrive.io',
+              MODE: 'legacy',
+            }),
+            processId: arioProcess,
           }),
-          processId: arioProcess,
-        }),
-      })
-
-      spinner.succeed('ARIO initialized')
-
-      // Get ArNS record
-      spinner.start(`Fetching ArNS record for ${chalk.yellow(deployConfig['arns-name'])}`)
-      const arnsNameRecord = await ario
-        .getArNSRecord({ name: deployConfig['arns-name'] })
-        .catch(() => {
-          spinner.fail(`ArNS name ${chalk.red(deployConfig['arns-name'])} does not exist`)
-          this.error(`ArNS name [${deployConfig['arns-name']}] does not exist`)
         })
 
-      spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
+        spinner.succeed('ARIO initialized')
 
-      // Create signer
-      spinner.start('Creating signer')
-      const { signer, token } = createSigner(deployConfig['sig-type'] as SignerType, deployKey)
-      spinner.succeed(`Signer created (${chalk.cyan(deployConfig['sig-type'])})`)
+        // Get ArNS record
+        spinner.start(`Fetching ArNS record for ${chalk.yellow(deployConfig['arns-name'])}`)
+        const arnsNameRecord = await ario
+          .getArNSRecord({ name: deployConfig['arns-name'] })
+          .catch(() => {
+            spinner.fail(`ArNS name ${chalk.red(deployConfig['arns-name'])} does not exist`)
+            this.error(`ArNS name [${deployConfig['arns-name']}] does not exist`)
+          })
 
-      // Initialize Turbo
-      spinner.start('Initializing Turbo')
-      const turbo = TurboFactory.authenticated({
-        signer,
-        token,
-      })
-      spinner.succeed('Turbo initialized')
+        spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
 
-      // Upload file or folder
-      let txOrManifestId: string
-      if (deployConfig['deploy-file']) {
-        const filePath = expandPath(deployConfig['deploy-file'])
-        spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
-        txOrManifestId = await uploadFile(turbo, filePath)
-        spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
-      } else {
-        const folderPath = expandPath(deployConfig['deploy-folder'])
-        spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-        txOrManifestId = await uploadFolder(turbo, folderPath)
-        spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
-      }
+        // Create signer
+        spinner.start('Creating signer')
+        const { signer, token } = createSigner(deployConfig['sig-type'] as SignerType, deployKey)
+        spinner.succeed(`Signer created (${chalk.cyan(deployConfig['sig-type'])})`)
 
-      this.log('')
+        // Initialize Turbo
+        spinner.start('Initializing Turbo')
+        const turbo = TurboFactory.authenticated({
+          signer,
+          token,
+        })
+        spinner.succeed('Turbo initialized')
 
-      // Initialize ANT and update record
-      spinner.start('Updating ANT record')
-      const ant = ANT.init({ processId: arnsNameRecord.processId, signer })
+        // Upload file or folder
+        let txOrManifestId: string
+        if (deployConfig['deploy-file']) {
+          const filePath = expandPath(deployConfig['deploy-file'])
+          spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
+          txOrManifestId = await uploadFile(turbo, filePath)
+          spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
+        } else {
+          const folderPath = expandPath(deployConfig['deploy-folder'])
+          spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
+          txOrManifestId = await uploadFolder(turbo, folderPath)
+          spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
+        }
 
-      await ant.setRecord(
-        {
-          transactionId: txOrManifestId,
-          ttlSeconds: Number.parseInt(deployConfig['ttl-seconds'], 10),
-          undername: deployConfig.undername,
-        },
-        {
-          tags: [
-            {
-              name: 'App-Name',
-              value: 'Permaweb-Deploy',
-            },
-            ...(process.env.GITHUB_SHA
-              ? [
-                  {
-                    name: 'GIT-HASH',
-                    value: process.env.GITHUB_SHA,
-                  },
-                ]
-              : []),
-          ],
-        },
-      )
+        this.log('')
 
-      spinner.succeed('ANT record updated')
+        // Initialize ANT and update record
+        spinner.start('Updating ANT record')
+        const ant = ANT.init({ processId: arnsNameRecord.processId, signer })
 
-      // Display deployment details in a table inside a success box
-      const table = new Table({
-        head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
-        style: {
-          head: [],
-        },
-      })
+        await ant.setRecord(
+          {
+            transactionId: txOrManifestId,
+            ttlSeconds: Number.parseInt(deployConfig['ttl-seconds'], 10),
+            undername: deployConfig.undername,
+          },
+          {
+            tags: [
+              {
+                name: 'App-Name',
+                value: 'Permaweb-Deploy',
+              },
+              ...(process.env.GITHUB_SHA
+                ? [
+                    {
+                      name: 'GIT-HASH',
+                      value: process.env.GITHUB_SHA,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        )
 
-      table.push(
-        ['Tx ID', chalk.green(txOrManifestId)],
-        ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
-        ['Undername', chalk.yellow(deployConfig.undername)],
-        ['ANT', chalk.cyan(arnsNameRecord.processId)],
-        ['ARIO Process', chalk.gray(arioProcess)],
-        ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
-      )
+        spinner.succeed('ANT record updated')
 
-      const successMessage = boxen(
-        `${chalk.green.bold('✨ Deployment Successful!')}\n\n${table.toString()}`,
-        {
-          borderColor: 'green',
-          borderStyle: 'round',
-          padding: 1,
-          title: chalk.bold('🚀 Permaweb Deploy'),
-          titleAlignment: 'center',
-        },
-      )
+        // Display deployment details in a table inside a success box
+        const table = new Table({
+          head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
+          style: {
+            head: [],
+          },
+        })
+
+        table.push(
+          ['Tx ID', chalk.green(txOrManifestId)],
+          ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
+          ['Undername', chalk.yellow(deployConfig.undername)],
+          ['ANT', chalk.cyan(arnsNameRecord.processId)],
+          ['ARIO Process', chalk.gray(arioProcess)],
+          ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
+        )
+
+        const successMessage = boxen(
+          `${chalk.green.bold('✨ Deployment Successful!')}\n\n${table.toString()}`,
+          {
+            borderColor: 'green',
+            borderStyle: 'round',
+            padding: 1,
+            title: chalk.bold('🚀 Permaweb Deploy'),
+            titleAlignment: 'center',
+          },
+        )
 
         this.log(`\n${successMessage}`)
       } catch (error) {

@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "vite build && tsc --emitDeclarationOnly",
-    "dev": "tsx src/index.ts",
+    "dev": "./bin/dev.js",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",

@@ -36,102 +36,102 @@ export default class Deploy extends Command {
   static override flags = extractFlags(deployFlagConfigs)
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(Deploy)
-
-    // Check if we need interactive mode (no arns-name provided)
-    const interactive = !flags['arns-name']
-
-    if (interactive) {
-      this.log(chalk.cyan.bold('\n🎯 Interactive Deployment Mode\n'))
-    }
-
-    // Resolve base configuration - prompts will run automatically in interactive mode
-    const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
-      interactive,
-    })) as DeployConfig
-
-    // Handle wallet configuration (shared between wallet and privateKey)
-    let walletConfig: { privateKey?: string; wallet?: string } = {
-      privateKey: baseConfig['private-key'],
-      wallet: baseConfig.wallet,
-    }
-
-    if (interactive && !baseConfig.wallet && !baseConfig['private-key']) {
-      const config = await getWalletConfig()
-      walletConfig = {
-        privateKey: config.privateKey,
-        wallet: config.wallet,
-      }
-    }
-
-    // Handle advanced options (shared between ttlSeconds, undername, arioProcess)
-    let advancedOptions:
-      | {
-          arioProcess: string
-          ttlSeconds: string
-          undername: string
-        }
-      | undefined
-
-    if (interactive) {
-      const options = await promptAdvancedOptions()
-      advancedOptions = options || undefined
-    }
-
-    // Build final config with shared prompt results
-    const deployConfig: DeployConfig = {
-      'ario-process': advancedOptions?.arioProcess || baseConfig['ario-process'],
-      'arns-name': baseConfig['arns-name'],
-      'deploy-file': baseConfig['deploy-file'],
-      'deploy-folder': baseConfig['deploy-folder'],
-      'private-key': walletConfig.privateKey,
-      'sig-type': baseConfig['sig-type'],
-      'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
-      undername: advancedOptions?.undername || baseConfig.undername,
-      wallet: walletConfig.wallet,
-    }
-
-    if (interactive) {
-      this.log('')
-    }
-
-    // Get deploy key from wallet file, private-key flag, or environment variable
-    let deployKey: string
-    if (deployConfig.wallet) {
-      const walletPath = expandPath(deployConfig.wallet)
-      if (!fs.existsSync(walletPath)) {
-        this.error(`Wallet file [${deployConfig.wallet}] does not exist`)
-      }
-
-      const walletContent = fs.readFileSync(walletPath, 'utf8')
-      // For Arweave wallets (JWK), encode to base64. For others (private keys), use as-is
-      deployKey =
-        deployConfig['sig-type'] === 'arweave'
-          ? Buffer.from(walletContent).toString('base64')
-          : walletContent.trim()
-    } else if (deployConfig['private-key']) {
-      // For Arweave wallets (JWK JSON), encode to base64. For others, use as-is
-      deployKey =
-        deployConfig['sig-type'] === 'arweave'
-          ? Buffer.from(deployConfig['private-key']).toString('base64')
-          : deployConfig['private-key'].trim()
-    } else {
-      deployKey = process.env.DEPLOY_KEY || ''
-      if (!deployKey) {
-        this.error(
-          'DEPLOY_KEY environment variable not set. Use --wallet, --private-key, or set DEPLOY_KEY',
-        )
-      }
-    }
-
-    // All validation is now handled in resolveDeployConfig
-    const arioProcess = deployConfig['ario-process']
-
-    this.log(chalk.cyan.bold('\n🚀 Starting deployment...\n'))
-
     try {
-      // Initialize ARIO
-      const spinner = ora('Initializing ARIO').start()
+      const { flags } = await this.parse(Deploy)
+
+      // Check if we need interactive mode (no arns-name provided)
+      const interactive = !flags['arns-name']
+
+      if (interactive) {
+        this.log(chalk.cyan.bold('\n🎯 Interactive Deployment Mode\n'))
+      }
+
+      // Resolve base configuration - prompts will run automatically in interactive mode
+      const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
+        interactive,
+      })) as DeployConfig
+
+      // Handle wallet configuration (shared between wallet and privateKey)
+      let walletConfig: { privateKey?: string; wallet?: string } = {
+        privateKey: baseConfig['private-key'],
+        wallet: baseConfig.wallet,
+      }
+
+      if (interactive && !baseConfig.wallet && !baseConfig['private-key']) {
+        const config = await getWalletConfig()
+        walletConfig = {
+          privateKey: config.privateKey,
+          wallet: config.wallet,
+        }
+      }
+
+      // Handle advanced options (shared between ttlSeconds, undername, arioProcess)
+      let advancedOptions:
+        | {
+            arioProcess: string
+            ttlSeconds: string
+            undername: string
+          }
+        | undefined
+
+      if (interactive) {
+        const options = await promptAdvancedOptions()
+        advancedOptions = options || undefined
+      }
+
+      // Build final config with shared prompt results
+      const deployConfig: DeployConfig = {
+        'ario-process': advancedOptions?.arioProcess || baseConfig['ario-process'],
+        'arns-name': baseConfig['arns-name'],
+        'deploy-file': baseConfig['deploy-file'],
+        'deploy-folder': baseConfig['deploy-folder'],
+        'private-key': walletConfig.privateKey,
+        'sig-type': baseConfig['sig-type'],
+        'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
+        undername: advancedOptions?.undername || baseConfig.undername,
+        wallet: walletConfig.wallet,
+      }
+
+      if (interactive) {
+        this.log('')
+      }
+
+      // Get deploy key from wallet file, private-key flag, or environment variable
+      let deployKey: string
+      if (deployConfig.wallet) {
+        const walletPath = expandPath(deployConfig.wallet)
+        if (!fs.existsSync(walletPath)) {
+          this.error(`Wallet file [${deployConfig.wallet}] does not exist`)
+        }
+
+        const walletContent = fs.readFileSync(walletPath, 'utf8')
+        // For Arweave wallets (JWK), encode to base64. For others (private keys), use as-is
+        deployKey =
+          deployConfig['sig-type'] === 'arweave'
+            ? Buffer.from(walletContent).toString('base64')
+            : walletContent.trim()
+      } else if (deployConfig['private-key']) {
+        // For Arweave wallets (JWK JSON), encode to base64. For others, use as-is
+        deployKey =
+          deployConfig['sig-type'] === 'arweave'
+            ? Buffer.from(deployConfig['private-key']).toString('base64')
+            : deployConfig['private-key'].trim()
+      } else {
+        deployKey = process.env.DEPLOY_KEY || ''
+        if (!deployKey) {
+          this.error(
+            'DEPLOY_KEY environment variable not set. Use --wallet, --private-key, or set DEPLOY_KEY',
+          )
+        }
+      }
+
+      // All validation is now handled in resolveDeployConfig
+      const arioProcess = deployConfig['ario-process']
+
+      this.log(chalk.cyan.bold('\n🚀 Starting deployment...\n'))
+      try {
+        // Initialize ARIO
+        const spinner = ora('Initializing ARIO').start()
 
       const ario = ARIO.init({
         process: new AOProcess({
@@ -243,11 +243,20 @@ export default class Deploy extends Command {
         },
       )
 
-      this.log(`\n${successMessage}`)
+        this.log(`\n${successMessage}`)
+      } catch (error) {
+        this.error(
+          chalk.red(`Deployment failed: ${error instanceof Error ? error.message : String(error)}`),
+        )
+      }
     } catch (error) {
-      this.error(
-        chalk.red(`Deployment failed: ${error instanceof Error ? error.message : String(error)}`),
-      )
+      // Handle user cancellation (Ctrl+C)
+      if (error instanceof Error && error.name === 'ExitPromptError') {
+        this.log(chalk.yellow('\n\n👋 Deployment cancelled'))
+        this.exit(0)
+      }
+
+      throw error
     }
   }
 }

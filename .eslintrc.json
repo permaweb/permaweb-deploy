@@ -23,6 +23,9 @@
     "unicorn/consistent-destructuring": "off",
     "perfectionist/sort-imports": "off",
     "perfectionist/sort-named-imports": "off",
+    "perfectionist/sort-object-types": "off",
+    "perfectionist/sort-interfaces": "off",
+    "perfectionist/sort-union-types": "off",
     "import/order": "off",
     "jsdoc/require-returns": "off",
     "new-cap": "off"

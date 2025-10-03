@@ -62,6 +62,7 @@ jobs:
               pnpm build
               ;;
             test)
+              pnpm build
               pnpm test:run
               ;;
           esac

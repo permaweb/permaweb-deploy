@@ -5,6 +5,7 @@ Inspired by the [cookbook github action deployment guide](https://cookbook.arwea
 ## Features
 
 - **Turbo SDK Integration:** Uses Turbo SDK for fast, reliable file uploads to Arweave
+- **On-Demand Payment:** Pay with ARIO or Base-ETH tokens on-demand during upload
 - **Arweave Manifest v0.2.0:** Creates manifests with fallback support for SPAs
 - **ArNS Updates:** Updates ArNS records via ANT with new transaction IDs and metadata
 - **Automated Workflow:** Integrates with GitHub Actions for continuous deployment
@@ -42,9 +43,7 @@ yarn add --dev permaweb-deploy
    ```bash
    base64 -i wallet.json | pbcopy
    ```
-
 2. **For Ethereum/Polygon/KYVE signers:** Use your raw private key (no encoding needed) as the `DEPLOY_KEY`.
-
 3. Ensure that the secret name for the encoded wallet or private key is `DEPLOY_KEY`.
 
 ⚠️ **Important:** Use a dedicated wallet for deployments to minimize security risks. Ensure your wallet has sufficient Turbo Credits for uploads.
@@ -64,6 +63,7 @@ permaweb-deploy interactive
 ```
 
 This shows a menu with options:
+
 - **Deploy to Permaweb** - Start the deployment wizard
 - **Show Help** - Display help information
 - **Exit** - Exit the CLI
@@ -77,6 +77,7 @@ permaweb-deploy deploy
 ```
 
 This will prompt you for:
+
 - ArNS name
 - Wallet method (file, string, or environment variable)
 - Signer type (Arweave, Ethereum, Polygon, KYVE)
@@ -142,11 +143,38 @@ Deploy using Ethereum wallet (direct key):
 permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x1234..."
 ```
 
-Deploy with on-demand payment:
+### On-Demand Payment
+
+Use on-demand payment to automatically fund uploads with ARIO or Base-ETH tokens when your Turbo balance is insufficient:
+
+Deploy with ARIO on-demand payment:
 
 ```bash
-permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --on-demand ario --max-token-amount 1000
+permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --on-demand ario --max-token-amount 1.5
 ```
+
+Deploy with Base-ETH on-demand payment (using Ethereum signer):
+
+```bash
+permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x..." --on-demand base-eth --max-token-amount 0.1
+```
+
+**On-Demand Payment Options:**
+
+- `--on-demand`: Token to use for on-demand payment (`ario` or `base-eth`)
+- `--max-token-amount`: Maximum token amount to spend (in native token units, e.g., `1.5` for 1.5 ARIO or `0.1` for 0.1 ETH)
+
+**How it works:**
+
+1. Checks your Turbo balance before upload
+2. If balance is insufficient, converts tokens to Turbo credits on-demand
+3. Automatically adds a 10% buffer (`topUpBufferMultiplier: 1.1`) for reliability
+4. Proceeds with upload once funded
+
+**Token compatibility:**
+
+- **ARIO**: Works with Arweave signer
+- **Base-ETH**: Works with Ethereum signer (Base Network)
 
 ### Command Options
 
@@ -172,7 +200,8 @@ Add deployment scripts to your `package.json`:
     "build": "vite build",
     "deploy": "pnpm build && permaweb-deploy deploy --arns-name <ARNS_NAME>",
     "deploy:staging": "pnpm build && permaweb-deploy deploy --arns-name <ARNS_NAME> --undername staging",
-    "deploy:testnet": "pnpm build && permaweb-deploy deploy --arns-name <ARNS_NAME> --ario-process testnet"
+    "deploy:testnet": "pnpm build && permaweb-deploy deploy --arns-name <ARNS_NAME> --ario-process testnet",
+    "deploy:on-demand": "pnpm build && permaweb-deploy deploy --arns-name <ARNS_NAME> --on-demand ario --max-token-amount 1.5"
   }
 }
 ```
@@ -183,9 +212,17 @@ Then deploy with:
 DEPLOY_KEY=$(base64 -i wallet.json) pnpm deploy
 ```
 
+Or with on-demand payment:
+
+```bash
+DEPLOY_KEY=$(base64 -i wallet.json) pnpm deploy:on-demand
+```
+
 ## GitHub Actions Workflow
 
 To automate deployments, set up a GitHub Actions workflow:
+
+**Basic Workflow:**
 
 ```yaml
 name: Deploy to Permaweb
@@ -200,21 +237,66 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+    
       - uses: pnpm/action-setup@v3
         with:
           version: 9
-      
+    
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-      
+    
       - run: pnpm install
-      
+    
       - run: pnpm deploy
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+```
+
+**With On-Demand Payment:**
+
+```yaml
+name: Deploy to Permaweb with On-Demand Payment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+    
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+    
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+    
+      - run: pnpm install
+      - run: pnpm build
+    
+      - name: Deploy with ARIO on-demand
+        run: permaweb-deploy deploy --arns-name my-app --on-demand ario --max-token-amount 2.0
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+    
+      # Or deploy with Ethereum and Base-ETH:
+      # - name: Deploy with Base-ETH on-demand
+      #   run: |
+      #     permaweb-deploy deploy \
+      #       --arns-name my-app \
+      #       --sig-type ethereum \
+      #       --on-demand base-eth \
+      #       --max-token-amount 0.2
+      #   env:
+      #     DEPLOY_KEY: ${{ secrets.ETH_PRIVATE_KEY }}
 ```
 
 ## Development
@@ -269,7 +351,8 @@ permaweb-deploy/
 - **Dedicated Wallet:** Always use a dedicated wallet for deployments to minimize security risks
 - **Wallet Encoding:** Arweave wallets must be base64 encoded to be used in the deployment script
 - **ArNS Name:** The ArNS Name must be passed so that the ANT Process can be resolved to update the target undername or root record
-- **Turbo Credits:** Ensure your wallet has sufficient Turbo Credits before deployment
+- **Turbo Credits:** Ensure your wallet has sufficient Turbo Credits, or use on-demand payment for automatic funding
+- **On-Demand Limits:** Set reasonable `--max-token-amount` limits to prevent unexpected costs
 - **Secret Management:** Keep your `DEPLOY_KEY` secret secure and never commit it to your repository
 - **Build Security:** Always check your build for exposed environmental secrets before deployment, as data on Arweave is permanent
 
@@ -280,7 +363,8 @@ permaweb-deploy/
 - **Error: "deploy-file does not exist":** Check that your build file exists and the path is correct
 - **Error: "ArNS name does not exist":** Verify the ArNS name is correct and exists in the specified network
 - **Upload timeouts:** Files have a timeout for upload. Large files may fail and require optimization
-- **Insufficient Turbo Credits:** Ensure your wallet has enough Turbo Credits for the deployment
+- **Insufficient Turbo Credits:** Use `--on-demand` with `--max-token-amount` to automatically fund uploads when balance is low
+- **On-demand payment fails:** Ensure your wallet has sufficient tokens (ARIO or Base-ETH) and the token type matches your signer (`ario` with Arweave, `base-eth` with Ethereum)
 
 ## Contributing
 

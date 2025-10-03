@@ -6,7 +6,6 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
-        'commands/interactive': resolve(__dirname, 'src/commands/interactive.ts'),
         'commands/deploy': resolve(__dirname, 'src/commands/deploy.ts'),
         'constants/flags': resolve(__dirname, 'src/constants/flags.ts'),
         'prompts/arns': resolve(__dirname, 'src/prompts/arns.ts'),

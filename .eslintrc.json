@@ -32,8 +32,10 @@
     "no-await-in-loop": "off",
     "unicorn/consistent-destructuring": "off",
     "perfectionist/sort-imports": "off",
+    "perfectionist/sort-named-imports": "off",
     "import/order": "off",
-    "jsdoc/require-returns": "off"
+    "jsdoc/require-returns": "off",
+    "new-cap": "off"
   }
 }
 

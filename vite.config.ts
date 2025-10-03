@@ -1,9 +1,7 @@
 import { resolve } from 'node:path'
-import { defineConfig } from 'vite'
-import tsconfigPaths from 'vite-tsconfig-paths'
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
   build: {
     lib: {
       entry: {
@@ -53,6 +51,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: {
+      // Enable MSW verbose logging by default (can be disabled with MSW_VERBOSE=false)
+      MSW_VERBOSE: process.env.MSW_VERBOSE ?? 'true',
+    },
+    globalSetup: ['./tests/global-setup.ts'],
+    setupFiles: ['./tests/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

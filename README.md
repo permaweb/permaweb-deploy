@@ -142,6 +142,12 @@ Deploy using Ethereum wallet (direct key):
 permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x1234..."
 ```
 
+Deploy with on-demand payment:
+
+```bash
+permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --on-demand ario --max-token-amount 1000
+```
+
 ### Command Options
 
 - `--arns-name, -n` (required): The ArNS name to update
@@ -153,6 +159,8 @@ permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x1
 - `--sig-type, -s`: Signer type for deployment. Choices: `arweave`, `ethereum`, `polygon`, `kyve`. Default: `arweave`
 - `--wallet, -w`: Path to wallet file (JWK for Arweave, private key for Ethereum/Polygon/KYVE)
 - `--private-key, -k`: Private key or JWK JSON string (alternative to `--wallet`)
+- `--on-demand`: Enable on-demand payment with specified token. Choices: `ario`, `base-eth`
+- `--max-token-amount`: Maximum token amount for on-demand payment (used with `--on-demand`)
 
 ### Package.json Scripts
 

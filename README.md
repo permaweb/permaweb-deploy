@@ -43,6 +43,7 @@ yarn add --dev permaweb-deploy
    ```bash
    base64 -i wallet.json | pbcopy
    ```
+
 2. **For Ethereum/Polygon/KYVE signers:** Use your raw private key (no encoding needed) as the `DEPLOY_KEY`.
 3. Ensure that the secret name for the encoded wallet or private key is `DEPLOY_KEY`.
 
@@ -237,18 +238,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-    
+
       - uses: pnpm/action-setup@v3
         with:
           version: 9
-    
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-    
+
       - run: pnpm install
-    
+
       - run: pnpm deploy
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
@@ -269,24 +270,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-    
+
       - uses: pnpm/action-setup@v3
         with:
           version: 9
-    
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-    
+
       - run: pnpm install
       - run: pnpm build
-    
+
       - name: Deploy with ARIO on-demand
         run: permaweb-deploy deploy --arns-name my-app --on-demand ario --max-token-amount 2.0
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-    
+
       # Or deploy with Ethereum and Base-ETH:
       # - name: Deploy with Base-ETH on-demand
       #   run: |

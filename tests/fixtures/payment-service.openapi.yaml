@@ -11,7 +11,7 @@ components:
     Winc:
       type: string
       description: A big number string representing an amount of credits in winc.
-      example: "332824926"
+      example: '332824926'
 
     BalanceResponse:
       type: object
@@ -30,7 +30,7 @@ components:
       type: object
       properties:
         winc:
-          "$ref": "#/components/schemas/Winc"
+          '$ref': '#/components/schemas/Winc'
         adjustments:
           type: array
           items:
@@ -40,7 +40,7 @@ components:
       type: object
       properties:
         winc:
-          "$ref": "#/components/schemas/Winc"
+          '$ref': '#/components/schemas/Winc'
         adjustments:
           type: array
           items:
@@ -93,12 +93,12 @@ paths:
           schema:
             type: string
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/BalanceResponse"
+                '$ref': '#/components/schemas/BalanceResponse'
 
   /price/bytes/{byteCount}:
     get:
@@ -112,12 +112,12 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/CreditResponse"
+                '$ref': '#/components/schemas/CreditResponse'
 
   /price/{type}/{amount}:
     get:
@@ -142,12 +142,12 @@ paths:
           schema:
             type: integer
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/PaymentCreditResponse"
+                '$ref': '#/components/schemas/PaymentCreditResponse'
 
   /account/balance/{token}:
     post:
@@ -175,7 +175,7 @@ paths:
                 tx_id:
                   type: string
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
@@ -185,5 +185,4 @@ paths:
                   message:
                     type: string
                   creditedTransaction:
-                    "$ref": "#/components/schemas/CreditedPaymentTx"
-
+                    '$ref': '#/components/schemas/CreditedPaymentTx'

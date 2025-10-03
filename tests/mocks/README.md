@@ -11,10 +11,12 @@ All mock handlers are **fully typed** using TypeScript types generated from the 
 ## Type Generation
 
 Types are automatically generated from OpenAPI specs located in `tests/fixtures/`:
+
 - `upload-service.openapi.yaml` → `tests/types/upload-service.ts`
 - `payment-service.openapi.yaml` → `tests/types/payment-service.ts`
 
 **Regenerate types after updating OpenAPI specs:**
+
 ```bash
 pnpm generate:types
 ```
@@ -32,7 +34,7 @@ describe('My Upload Test', () => {
     // MSW automatically intercepts and mocks Turbo API calls
     const turbo = TurboFactory.authenticated({ signer, token: 'arweave' })
     const result = await turbo.uploadFile({ file: './test.txt' })
-    
+
     expect(result.id).toBe('mock-tx-id-123')
   })
 })
@@ -93,14 +95,11 @@ import { server } from '../setup.js'
 
 it('should top up when balance is low', async () => {
   // Setup: wallet has low balance
-  server.use(
-    mockInsufficientBalance('100'),
-    mockOnDemandFundingSuccess('1000000000000')
-  )
-  
+  server.use(mockInsufficientBalance('100'), mockOnDemandFundingSuccess('1000000000000'))
+
   // Your upload code that triggers on-demand funding
   const result = await uploadWithOnDemandFunding()
-  
+
   expect(result.success).toBe(true)
 })
 ```
@@ -138,4 +137,3 @@ server.events.on('request:start', ({ request }) => {
   console.log('MSW intercepted:', request.method, request.url)
 })
 ```
-

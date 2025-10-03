@@ -26,6 +26,7 @@ npx openapi-typescript tests/fixtures/payment-service.openapi.yaml -o tests/type
 ```
 
 Generated types are used in:
+
 - MSW mock handlers (`tests/mocks/turbo-handlers.ts`)
 - Test files for type-safe API responses
 
@@ -59,4 +60,3 @@ const mockResponse: DataItemPost = {
 ✅ **Error Prevention** - TypeScript catches mismatches at compile time
 ✅ **Documentation** - Types serve as inline API documentation
 ✅ **Maintainability** - Single source of truth for API structure
-

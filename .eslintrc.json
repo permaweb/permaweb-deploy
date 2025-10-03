@@ -3,24 +3,14 @@
     "es2022": true,
     "node": true
   },
-  "extends": [
-    "oclif",
-    "oclif-typescript",
-    "plugin:@typescript-eslint/recommended",
-    "prettier"
-  ],
+  "extends": ["oclif", "oclif-typescript", "plugin:@typescript-eslint/recommended", "prettier"],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": 2022,
     "sourceType": "module",
     "project": "./tsconfig.json"
   },
-  "plugins": [
-    "@typescript-eslint",
-    "import",
-    "simple-import-sort",
-    "prettier"
-  ],
+  "plugins": ["@typescript-eslint", "import", "simple-import-sort", "prettier"],
   "rules": {
     "prettier/prettier": "error",
     "simple-import-sort/imports": "error",
@@ -38,4 +28,3 @@
     "new-cap": "off"
   }
 }
-

@@ -56,7 +56,9 @@ describe('Validator Unit Tests', () => {
     })
 
     it('should reject non-existent files', () => {
-      expect(validateFileExists('./does-not-exist.txt')).toBe('File ./does-not-exist.txt does not exist')
+      expect(validateFileExists('./does-not-exist.txt')).toBe(
+        'File ./does-not-exist.txt does not exist',
+      )
     })
 
     it('should accept existing paths (even directories)', () => {
@@ -83,4 +85,3 @@ describe('Validator Unit Tests', () => {
     })
   })
 })
-

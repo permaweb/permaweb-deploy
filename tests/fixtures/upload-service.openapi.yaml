@@ -16,11 +16,11 @@ components:
         id:
           type: string
           description: The id of the data item.
-          example: "QpmY8mZmFEC8RxNsgbxSV6e36OF6quIYaPRKzvUco0o"
+          example: 'QpmY8mZmFEC8RxNsgbxSV6e36OF6quIYaPRKzvUco0o'
         owner:
           type: string
           description: The normalized wallet address that signed data item.
-          example: "8wgRDgvYOrtSaWEIV21g0lTuWDUnTu4_iYj4hmA7PI0"
+          example: '8wgRDgvYOrtSaWEIV21g0lTuWDUnTu4_iYj4hmA7PI0'
         dataCaches:
           type: array
           description: The Arweave data caches the data item has been posted to.
@@ -46,7 +46,7 @@ components:
         version:
           type: string
           description: The version of the receipt
-          example: "0.1.0"
+          example: '0.1.0'
         signature:
           type: string
           description: The base64URL signature of the receipt.
@@ -69,15 +69,15 @@ paths:
               type: string
               format: binary
       responses:
-        "200":
+        '200':
           description: The signed data item was successfully submitted.
           content:
             application/json:
               schema:
-                "$ref": "#/components/schemas/DataItemPost"
-        "402":
+                '$ref': '#/components/schemas/DataItemPost'
+        '402':
           description: Insufficient balance
-        "400":
+        '400':
           description: Invalid data item post
 
   /tx/{token}:
@@ -105,12 +105,11 @@ paths:
               type: string
               format: binary
       responses:
-        "200":
+        '200':
           description: The receipt of the uploaded data item.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DataItemPost"
-        "402":
+                $ref: '#/components/schemas/DataItemPost'
+        '402':
           description: Insufficient balance
-

@@ -4,215 +4,215 @@
  */
 
 export interface paths {
-    "/balance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Current Balance of winc */
-        get: {
-            parameters: {
-                query?: {
-                    address?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["BalanceResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/price/bytes/{byteCount}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Amount of Credits in winc for Byte Count */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    byteCount: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CreditResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/price/{type}/{amount}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get winc for Payment Type and Amount */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    type: "ario" | "solana" | "base-eth" | "arweave" | "ethereum";
-                    amount: number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PaymentCreditResponse"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/account/balance/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Post a pending payment transaction */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    token: "arweave" | "ario" | "solana" | "base-eth";
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        tx_id?: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            message?: string;
-                            creditedTransaction?: components["schemas"]["CreditedPaymentTx"];
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
+  '/account/balance/{token}': {
+    delete?: never
+    get?: never
+    head?: never
+    options?: never
+    parameters: {
+      cookie?: never
+      header?: never
+      path?: never
+      query?: never
+    }
+    patch?: never
+    /** Post a pending payment transaction */
+    post: {
+      parameters: {
+        cookie?: never
+        header?: never
+        path: {
+          token: 'ario' | 'arweave' | 'base-eth' | 'solana'
+        }
+        query?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            tx_id?: string
+          }
+        }
+      }
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            'application/json': {
+              creditedTransaction?: components['schemas']['CreditedPaymentTx']
+              message?: string
+            }
+          }
+          headers: {
+            [name: string]: unknown
+          }
+        }
+      }
+    }
+    put?: never
+    trace?: never
+  }
+  '/balance': {
+    delete?: never
+    /** Get Current Balance of winc */
+    get: {
+      parameters: {
+        cookie?: never
+        header?: never
+        path?: never
+        query?: {
+          address?: string
+        }
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            'application/json': components['schemas']['BalanceResponse']
+          }
+          headers: {
+            [name: string]: unknown
+          }
+        }
+      }
+    }
+    head?: never
+    options?: never
+    parameters: {
+      cookie?: never
+      header?: never
+      path?: never
+      query?: never
+    }
+    patch?: never
+    post?: never
+    put?: never
+    trace?: never
+  }
+  '/price/{type}/{amount}': {
+    delete?: never
+    /** Get winc for Payment Type and Amount */
+    get: {
+      parameters: {
+        cookie?: never
+        header?: never
+        path: {
+          amount: number
+          type: 'ario' | 'arweave' | 'base-eth' | 'ethereum' | 'solana'
+        }
+        query?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            'application/json': components['schemas']['PaymentCreditResponse']
+          }
+          headers: {
+            [name: string]: unknown
+          }
+        }
+      }
+    }
+    head?: never
+    options?: never
+    parameters: {
+      cookie?: never
+      header?: never
+      path?: never
+      query?: never
+    }
+    patch?: never
+    post?: never
+    put?: never
+    trace?: never
+  }
+  '/price/bytes/{byteCount}': {
+    delete?: never
+    /** Get Amount of Credits in winc for Byte Count */
+    get: {
+      parameters: {
+        cookie?: never
+        header?: never
+        path: {
+          byteCount: number
+        }
+        query?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            'application/json': components['schemas']['CreditResponse']
+          }
+          headers: {
+            [name: string]: unknown
+          }
+        }
+      }
+    }
+    head?: never
+    options?: never
+    parameters: {
+      cookie?: never
+      header?: never
+      path?: never
+      query?: never
+    }
+    patch?: never
+    post?: never
+    put?: never
+    trace?: never
+  }
 }
-export type webhooks = Record<string, never>;
+export type webhooks = Record<string, never>
 export interface components {
-    schemas: {
-        /**
-         * @description A big number string representing an amount of credits in winc.
-         * @example 332824926
-         */
-        Winc: string;
-        BalanceResponse: {
-            /** @description Total winc if all approvals are revoked */
-            controlledWinc?: string;
-            /** @description Total winc user can spend */
-            winc?: string;
-            /** @description Total winc including shared credits */
-            effectiveBalance?: string;
-        };
-        CreditResponse: {
-            winc?: components["schemas"]["Winc"];
-            adjustments?: Record<string, never>[];
-        };
-        PaymentCreditResponse: {
-            winc?: components["schemas"]["Winc"];
-            adjustments?: Record<string, never>[];
-            fees?: Record<string, never>[];
-            actualPaymentAmount?: number;
-            quotedPaymentAmount?: number;
-        };
-        CreditedPaymentTx: {
-            transactionId?: string;
-            transactionQuantity?: number;
-            winstonCreditAmount?: string;
-            winc?: string;
-            status?: string;
-            id?: string;
-            quantity?: string;
-            owner?: string;
-            target?: string;
-            block?: number;
-            confirmedBlocks?: number;
-        };
-    };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+  headers: never
+  parameters: never
+  pathItems: never
+  requestBodies: never
+  responses: never
+  schemas: {
+    BalanceResponse: {
+      /** @description Total winc if all approvals are revoked */
+      controlledWinc?: string
+      /** @description Total winc including shared credits */
+      effectiveBalance?: string
+      /** @description Total winc user can spend */
+      winc?: string
+    }
+    CreditResponse: {
+      adjustments?: Record<string, never>[]
+      winc?: components['schemas']['Winc']
+    }
+    CreditedPaymentTx: {
+      block?: number
+      confirmedBlocks?: number
+      id?: string
+      owner?: string
+      quantity?: string
+      status?: string
+      target?: string
+      transactionId?: string
+      transactionQuantity?: number
+      winc?: string
+      winstonCreditAmount?: string
+    }
+    PaymentCreditResponse: {
+      actualPaymentAmount?: number
+      adjustments?: Record<string, never>[]
+      fees?: Record<string, never>[]
+      quotedPaymentAmount?: number
+      winc?: components['schemas']['Winc']
+    }
+    /**
+     * @description A big number string representing an amount of credits in winc.
+     * @example 332824926
+     */
+    Winc: string
+  }
 }
-export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export type $defs = Record<string, never>
+export type operations = Record<string, never>

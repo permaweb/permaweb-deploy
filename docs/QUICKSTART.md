@@ -15,6 +15,7 @@ pnpm add -D permaweb-deploy
 1. **Prepare your wallet**
 
    For Arweave (default):
+
    ```bash
    base64 -i wallet.json | pbcopy
    ```
@@ -104,16 +105,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: pnpm/action-setup@v3
         with:
           version: 9
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
-      
+
       - run: pnpm install
       - run: pnpm deploy
         env:
@@ -125,6 +126,7 @@ jobs:
 **Issue:** "DEPLOY_KEY environment variable not set"
 
 **Solution:** Make sure you've exported the DEPLOY_KEY variable or passed it inline:
+
 ```bash
 DEPLOY_KEY=$(base64 -i wallet.json) permaweb-deploy deploy --arns-name my-app
 ```
@@ -134,6 +136,7 @@ DEPLOY_KEY=$(base64 -i wallet.json) permaweb-deploy deploy --arns-name my-app
 **Issue:** "deploy-folder does not exist"
 
 **Solution:** Make sure your build step runs before deployment and outputs to the correct folder:
+
 ```bash
 pnpm build && permaweb-deploy deploy --arns-name my-app --deploy-folder ./dist
 ```
@@ -155,4 +158,3 @@ pnpm build && permaweb-deploy deploy --arns-name my-app --deploy-folder ./dist
 - [Open an issue](https://github.com/permaweb/permaweb-deploy/issues)
 - [Read the docs](https://docs.ar.io/)
 - [Join the community](https://discord.gg/arweave)
-

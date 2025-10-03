@@ -54,9 +54,10 @@ MSW_VERBOSE=true pnpm test:e2e
 ```
 
 This will show:
+
 - 📤 Outgoing requests
 - ✅ Matched handlers
-- ⚠️  Unhandled requests
+- ⚠️ Unhandled requests
 - 📥 Mocked responses
 
 **Default**: MSW verbose logging is **disabled** by default for cleaner test output.
@@ -123,9 +124,12 @@ import { runCommand } from '@oclif/test'
 it('should deploy with on-demand funding', async () => {
   const result = await runCommand([
     'deploy',
-    '--deploy-folder', './test-app',
-    '--on-demand', 'ario',
-    '--max-token-amount', '1.5'
+    '--deploy-folder',
+    './test-app',
+    '--on-demand',
+    'ario',
+    '--max-token-amount',
+    '1.5',
   ])
 
   expect(result.error).toBeUndefined()
@@ -142,20 +146,16 @@ export const myHandlers = [
     const body = await request.json()
     return HttpResponse.json({
       success: true,
-      data: body
+      data: body,
     })
-  })
+  }),
 ]
 ```
 
 Then add to the combined handlers:
 
 ```typescript
-export const turboHandlers = [
-  ...turboUploadHandlers,
-  ...turboPaymentHandlers,
-  ...myHandlers
-]
+export const turboHandlers = [...turboUploadHandlers, ...turboPaymentHandlers, ...myHandlers]
 ```
 
 ## Test Constants
@@ -205,6 +205,7 @@ http.post('https://api.example.com/endpoint', async ({ request }) => {
 ## CI/CD
 
 Tests run automatically on:
+
 - Pull requests
 - Pushes to `main`
 - Release workflows

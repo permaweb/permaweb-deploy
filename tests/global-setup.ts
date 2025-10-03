@@ -9,8 +9,8 @@ export default function setup() {
 
   try {
     execSync('pnpm generate:types', {
-      stdio: 'inherit',
       cwd: process.cwd(),
+      stdio: 'inherit',
     })
     console.log('✅ Types generated successfully\n')
   } catch (error) {
@@ -18,4 +18,3 @@ export default function setup() {
     throw error
   }
 }
-

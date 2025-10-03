@@ -29,8 +29,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -59,16 +59,21 @@ jobs:
 
       - name: Setup npm authentication
         run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "always-auth=true" >> .npmrc
-
-      - name: Create snapshot release
-        run: |
-          pnpm changeset version --snapshot rc
-          pnpm changeset publish --tag rc --no-git-tag
+          cat << EOF > "$HOME/.npmrc"
+          //registry.npmjs.org/:_authToken=${NPM_TOKEN}
+          registry=https://registry.npmjs.org/
+          always-auth=true
+          EOF
+          cat "$HOME/.npmrc"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create snapshot version
+        run: pnpm exec changeset version --snapshot rc
+
+      - name: Publish snapshot to npm
+        run: pnpm exec changeset publish --tag rc --no-git-tag
+        env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -12,6 +12,7 @@ pnpm install
 ```
 
 This will:
+
 - Install all dependencies from package.json
 - Set up the pnpm workspace
 - Prepare git hooks with husky
@@ -23,6 +24,7 @@ pnpm build
 ```
 
 This will:
+
 - Compile TypeScript to JavaScript
 - Bundle with Vite
 - Generate type declarations
@@ -156,6 +158,7 @@ This PR completely revamps the permaweb-deploy CLI with modern tooling and best 
 ### 💔 Breaking Changes
 
 **Command structure:**
+
 - Before: `permaweb-deploy --arns-name my-app`
 - After: `permaweb-deploy deploy --arns-name my-app`
 
@@ -246,11 +249,13 @@ pnpm lint && pnpm test:run
 ### "pnpm: command not found"
 
 Install pnpm globally:
+
 ```bash
 npm install -g pnpm
 ```
 
 Or use npx:
+
 ```bash
 npx pnpm install
 ```
@@ -258,6 +263,7 @@ npx pnpm install
 ### Build Errors
 
 Clear cache and rebuild:
+
 ```bash
 rm -rf dist node_modules
 pnpm install
@@ -267,11 +273,13 @@ pnpm build
 ### Test Failures
 
 Check Node version (should be 18+):
+
 ```bash
 node --version
 ```
 
 Update if needed using nvm:
+
 ```bash
 nvm use 20
 ```
@@ -279,6 +287,7 @@ nvm use 20
 ### Linting Errors
 
 Auto-fix most issues:
+
 ```bash
 pnpm lint:fix
 pnpm format
@@ -306,4 +315,3 @@ If you run into issues:
 ---
 
 **Status**: Ready for testing and review! 🎉
-

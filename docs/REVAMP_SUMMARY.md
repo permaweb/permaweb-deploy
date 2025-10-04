@@ -38,16 +38,19 @@ The permaweb-deploy CLI has been completely revamped with modern tooling, TypeSc
 ### 5. CLI Framework: yargs → oclif ✅
 
 **Before:**
+
 ```bash
 permaweb-deploy --arns-name my-app
 ```
 
 **After:**
+
 ```bash
 permaweb-deploy deploy --arns-name my-app
 ```
 
 Benefits:
+
 - Better command structure
 - Built-in help system
 - Plugin support
@@ -57,23 +60,27 @@ Benefits:
 ### 6. Linting: ESLint (enhanced) ✅
 
 **Added:**
+
 - `@typescript-eslint/eslint-plugin`
 - `@typescript-eslint/parser`
 - oclif ESLint configs
 - Integration with Prettier
 
 **Configuration:**
+
 - `.eslintrc.json` with TypeScript rules
 - `.eslintignore` for exclusions
 
 ### 7. Formatting: Prettier (new) ✅
 
 **Added:**
+
 - Prettier for code formatting
 - `eslint-plugin-simple-import-sort` for import organization
 - `eslint-plugin-prettier` for integration
 
 **Features:**
+
 - Single quotes
 - No semicolons
 - Trailing commas
@@ -83,12 +90,14 @@ Benefits:
 ### 8. Commit Standards: commitlint (new) ✅
 
 **Added:**
+
 - `@commitlint/cli`
 - `@commitlint/config-conventional`
 - Husky git hooks
 - Conventional commit enforcement
 
 **Commit format:**
+
 ```
 type(scope): subject
 ```
@@ -98,12 +107,14 @@ Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
 ### 9. Version Management: changesets (new) ✅
 
 **Added:**
+
 - `@changesets/cli` for version management
 - `.changeset/` directory for tracking changes
 - Automated changelog generation
 - Semantic versioning support
 
 **Workflow:**
+
 ```bash
 pnpm changeset       # Create a changeset
 pnpm version         # Update versions
@@ -113,6 +124,7 @@ pnpm release         # Publish to npm
 ### 10. Code Organization ✅
 
 **New structure:**
+
 ```
 src/
 ├── commands/        # oclif commands
@@ -128,6 +140,7 @@ src/
 ```
 
 **Benefits:**
+
 - Clear separation of concerns
 - Easy to find and modify code
 - Better for testing
@@ -136,6 +149,7 @@ src/
 ## New Files Created
 
 ### Configuration
+
 - `tsconfig.json` - TypeScript configuration
 - `vite.config.ts` - Vite build configuration
 - `.eslintrc.json` - ESLint rules
@@ -147,6 +161,7 @@ src/
 - `pnpm-workspace.yaml` - pnpm workspace config
 
 ### Documentation
+
 - `CONTRIBUTING.md` - Contribution guidelines
 - `MIGRATION.md` - Migration guide from v2 to v3
 - `QUICKSTART.md` - Quick start guide
@@ -154,6 +169,7 @@ src/
 - `REVAMP_SUMMARY.md` - This file
 
 ### Source Code
+
 - `src/index.ts` - Main entry point
 - `src/commands/deploy.ts` - Deploy command
 - `src/types/index.ts` - Type definitions
@@ -163,14 +179,17 @@ src/
 - `src/utils/__tests__/constants.test.ts` - Tests
 
 ### Scripts & Hooks
+
 - `bin/run.js` - Production entry point
 - `bin/dev.js` - Development entry point
 - `.husky/commit-msg` - Commit message validation hook
 
 ### CI/CD
+
 - `.github/workflows/ci.yml` - GitHub Actions workflow
 
 ### VS Code
+
 - `.vscode/settings.json` - Editor settings
 - `.vscode/extensions.json` - Recommended extensions
 
@@ -184,17 +203,21 @@ src/
 ## Package.json Changes
 
 ### Dependencies
+
 - Kept: All existing runtime dependencies
 - Added: `@oclif/core` for CLI framework
 
 ### DevDependencies
+
 **Removed:**
+
 - `@babel/cli`
 - `@babel/core`
 - `@babel/eslint-parser`
 - `@babel/preset-env`
 
 **Added:**
+
 - TypeScript tooling: `typescript`, `tsx`, `@types/node`, `@types/mime-types`
 - Vite tooling: `vite`, `vite-tsconfig-paths`
 - Vitest: `vitest`, `@vitest/coverage-v8`
@@ -207,7 +230,9 @@ src/
 - Git hooks: `husky`
 
 ### Scripts
+
 **Before:**
+
 ```json
 {
   "build": "babel src --out-dir dist"
@@ -215,6 +240,7 @@ src/
 ```
 
 **After:**
+
 ```json
 {
   "build": "vite build && tsc --emitDeclarationOnly",
@@ -253,6 +279,7 @@ src/
 ## Non-Breaking Changes
 
 All CLI flags and environment variables remain the same:
+
 - `--arns-name`, `--ario-process`, `--deploy-folder`, etc.
 - `DEPLOY_KEY` environment variable
 - Signer types: `arweave`, `ethereum`, `polygon`, `kyve`
@@ -261,12 +288,14 @@ All CLI flags and environment variables remain the same:
 ## Benefits
 
 ### For Users
+
 - ✅ Better error messages
 - ✅ Improved help system (`--help` on any command)
 - ✅ Faster development builds (Vite)
 - ✅ Better documentation
 
 ### For Contributors
+
 - ✅ TypeScript for better IDE support
 - ✅ Automated testing with Vitest
 - ✅ Code formatting with Prettier
@@ -277,6 +306,7 @@ All CLI flags and environment variables remain the same:
 - ✅ Better code organization
 
 ### For Maintainers
+
 - ✅ Easier to add new commands
 - ✅ Better test coverage
 - ✅ Automated releases with changesets
@@ -288,6 +318,7 @@ All CLI flags and environment variables remain the same:
 See [MIGRATION.md](./MIGRATION.md) for detailed migration instructions.
 
 **Quick migration:**
+
 1. Update package.json to add `deploy` subcommand
 2. Install new version: `pnpm add -D permaweb-deploy@^3.0.0`
 3. Update CI/CD to use pnpm
@@ -296,26 +327,31 @@ See [MIGRATION.md](./MIGRATION.md) for detailed migration instructions.
 ## Next Steps
 
 1. **Install dependencies:**
+
    ```bash
    pnpm install
    ```
 
 2. **Build the project:**
+
    ```bash
    pnpm build
    ```
 
 3. **Test it:**
+
    ```bash
    ./bin/run.js deploy --help
    ```
 
 4. **Initialize git hooks:**
+
    ```bash
    pnpm prepare
    ```
 
 5. **Make a commit:**
+
    ```bash
    git add .
    git commit -m "feat: revamp CLI with modern tooling"
@@ -338,6 +374,7 @@ See [MIGRATION.md](./MIGRATION.md) for detailed migration instructions.
 **Status:** ✅ Complete
 
 All requested features have been implemented:
+
 - ✅ pnpm package manager
 - ✅ changesets
 - ✅ TypeScript with tsx
@@ -348,4 +385,3 @@ All requested features have been implemented:
 - ✅ Vite for building
 - ✅ Vitest for testing
 - ✅ Proper folder organization
-

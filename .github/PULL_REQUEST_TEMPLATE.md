@@ -22,7 +22,7 @@
 ## Snapshot Release
 
 A release candidate (RC) version is automatically published when this PR is created or updated:
+
 - The snapshot workflow will publish an RC version to npm with the `@rc` tag
 - The RC version will be commented on this PR for testing
 - Install with: `pnpm add permaweb-deploy@<version>` (see comment below)
-

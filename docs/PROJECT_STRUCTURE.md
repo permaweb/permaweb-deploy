@@ -60,13 +60,18 @@ permaweb-deploy/
 Contains oclif command implementations. Each file exports a default class extending `Command` from `@oclif/core`.
 
 **Example:**
+
 ```typescript
 // src/commands/deploy.ts
 import { Command, Flags } from '@oclif/core'
 
 export default class Deploy extends Command {
-  static flags = { /* ... */ }
-  async run() { /* ... */ }
+  static flags = {
+    /* ... */
+  }
+  async run() {
+    /* ... */
+  }
 }
 ```
 
@@ -75,10 +80,13 @@ export default class Deploy extends Command {
 TypeScript type definitions shared across the codebase.
 
 **Example:**
+
 ```typescript
 // src/types/index.ts
 export type SignerType = 'arweave' | 'ethereum' | 'polygon' | 'kyve'
-export interface DeployOptions { /* ... */ }
+export interface DeployOptions {
+  /* ... */
+}
 ```
 
 ### Utils (`src/utils/`)
@@ -90,6 +98,7 @@ Utility functions organized by functionality:
 - **uploader.ts**: File and folder upload logic
 
 Each utility module should:
+
 - Be focused on a single responsibility
 - Export pure functions when possible
 - Include unit tests in `__tests__/` subdirectory
@@ -99,6 +108,7 @@ Each utility module should:
 Tests are co-located with the code they test using the `__tests__` directory pattern.
 
 **Example:**
+
 ```
 src/utils/
 ├── constants.ts
@@ -139,6 +149,7 @@ src/utils/
 3. **Declaration Files**: TypeScript declaration files are generated for type support
 
 Build outputs:
+
 ```
 dist/
 ├── index.js              # Main entry point
@@ -156,11 +167,13 @@ dist/
 ## Entry Points
 
 ### Production
+
 ```bash
 ./bin/run.js → @oclif/core → dist/commands/deploy.js
 ```
 
 ### Development
+
 ```bash
 ./bin/dev.js → tsx → src/commands/deploy.ts
 ```
@@ -168,10 +181,11 @@ dist/
 ## Adding New Commands
 
 1. Create command file:
+
    ```typescript
    // src/commands/your-command.ts
    import { Command } from '@oclif/core'
-   
+
    export default class YourCommand extends Command {
      static description = 'Your command description'
      async run() {
@@ -181,6 +195,7 @@ dist/
    ```
 
 2. Update `vite.config.ts` entry points:
+
    ```typescript
    entry: {
      // ... existing entries
@@ -201,6 +216,7 @@ dist/
 - **Coverage**: Aim for >80% coverage on utilities
 
 Run tests:
+
 ```bash
 pnpm test           # Watch mode
 pnpm test:run       # Single run
@@ -210,17 +226,20 @@ pnpm test:coverage  # With coverage report
 ## Conventions
 
 ### File Naming
+
 - Commands: kebab-case (e.g., `deploy.ts`)
 - Utils: camelCase (e.g., `uploader.ts`)
 - Types: camelCase (e.g., `index.ts`)
 - Tests: same name as file being tested with `.test.ts` extension
 
 ### Code Style
+
 - Use ESLint and Prettier
 - Import sorting with `simple-import-sort`
 - Conventional commits for commit messages
 
 ### Exports
+
 - Use named exports for utilities
 - Use default export for oclif commands
 - Use `.js` extension in imports (ESM requirement)
@@ -235,4 +254,3 @@ pnpm test:coverage  # With coverage report
 6. Test manually: `./bin/dev.js deploy --help`
 7. Create changeset: `pnpm changeset`
 8. Commit with conventional commit message
-

@@ -1,7 +1,12 @@
 import fs from 'node:fs'
 
 import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
-import { TurboFactory } from '@ardrive/turbo-sdk'
+import {
+  ARIOToTokenAmount,
+  ETHToTokenAmount,
+  OnDemandFunding,
+  TurboFactory,
+} from '@ardrive/turbo-sdk'
 import { Command } from '@oclif/core'
 import { connect } from '@permaweb/aoconnect'
 import boxen from 'boxen'
@@ -31,6 +36,7 @@ export default class Deploy extends Command {
     '<%= config.bin %> deploy --arns-name my-app --deploy-file ./dist/index.html',
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --wallet ./private-key.txt',
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --private-key "0x..."',
+    '<%= config.bin %> deploy --arns-name my-app --on-demand ario --max-token-amount 1000',
   ]
 
   static override flags = extractFlags(deployFlagConfigs)
@@ -65,10 +71,12 @@ export default class Deploy extends Command {
         }
       }
 
-      // Handle advanced options (shared between ttlSeconds, undername, arioProcess)
+      // Handle advanced options (shared between ttlSeconds, undername, arioProcess, onDemand, maxTokenAmount)
       let advancedOptions:
         | {
             arioProcess: string
+            maxTokenAmount?: string
+            onDemand?: string
             ttlSeconds: string
             undername: string
           }
@@ -85,6 +93,8 @@ export default class Deploy extends Command {
         'arns-name': baseConfig['arns-name'],
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
+        'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
+        'on-demand': advancedOptions?.onDemand || baseConfig['on-demand'],
         'private-key': walletConfig.privateKey,
         'sig-type': baseConfig['sig-type'],
         'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
@@ -133,12 +143,15 @@ export default class Deploy extends Command {
         // Initialize ARIO
         const spinner = ora('Initializing ARIO').start()
 
+        const ao = connect({
+          CU_URL: 'https://cu.ardrive.io',
+          MODE: 'legacy',
+          MU_URL: 'https://mu.ao-testnet.xyz',
+        })
+
         const ario = ARIO.init({
           process: new AOProcess({
-            ao: connect({
-              CU_URL: 'https://cu.ardrive.io',
-              MODE: 'legacy',
-            }),
+            ao,
             processId: arioProcess,
           }),
         })
@@ -169,17 +182,46 @@ export default class Deploy extends Command {
         })
         spinner.succeed('Turbo initialized')
 
+        // Create on-demand funding mode if specified
+        let fundingMode: OnDemandFunding | undefined
+        if (deployConfig['on-demand'] && deployConfig['max-token-amount']) {
+          const tokenType = deployConfig['on-demand']
+          const maxAmount = Number.parseFloat(deployConfig['max-token-amount'])
+
+          let maxTokenAmount: ReturnType<typeof ARIOToTokenAmount>
+          switch (tokenType) {
+            case 'ario': {
+              maxTokenAmount = ARIOToTokenAmount(maxAmount)
+              break
+            }
+
+            case 'base-eth': {
+              maxTokenAmount = ETHToTokenAmount(maxAmount)
+              break
+            }
+
+            default: {
+              throw new Error(`Unsupported on-demand token type: ${tokenType}`)
+            }
+          }
+
+          fundingMode = new OnDemandFunding({
+            maxTokenAmount,
+            topUpBufferMultiplier: 1.1,
+          })
+        }
+
         // Upload file or folder
         let txOrManifestId: string
         if (deployConfig['deploy-file']) {
           const filePath = expandPath(deployConfig['deploy-file'])
           spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
-          txOrManifestId = await uploadFile(turbo, filePath)
+          txOrManifestId = await uploadFile(turbo, filePath, { fundingMode })
           spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
         } else {
           const folderPath = expandPath(deployConfig['deploy-folder'])
           spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-          txOrManifestId = await uploadFolder(turbo, folderPath)
+          txOrManifestId = await uploadFolder(turbo, folderPath, { fundingMode })
           spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
         }
 

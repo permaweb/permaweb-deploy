@@ -15,4 +15,3 @@ Major CLI revamp with modern tooling:
 - Improved code organization with proper folder structure
 - Enhanced error handling and user feedback
 - Updated documentation and added CONTRIBUTING.md
-

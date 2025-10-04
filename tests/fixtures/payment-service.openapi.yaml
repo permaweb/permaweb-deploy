@@ -1,0 +1,188 @@
+openapi: 3.1.1
+info:
+  title: Payment Service
+  version: 0.1.0
+
+servers:
+  - url: https://payment.ardrive.io/v1
+
+components:
+  schemas:
+    Winc:
+      type: string
+      description: A big number string representing an amount of credits in winc.
+      example: '332824926'
+
+    BalanceResponse:
+      type: object
+      properties:
+        controlledWinc:
+          type: string
+          description: Total winc if all approvals are revoked
+        winc:
+          type: string
+          description: Total winc user can spend
+        effectiveBalance:
+          type: string
+          description: Total winc including shared credits
+
+    CreditResponse:
+      type: object
+      properties:
+        winc:
+          '$ref': '#/components/schemas/Winc'
+        adjustments:
+          type: array
+          items:
+            type: object
+
+    PaymentCreditResponse:
+      type: object
+      properties:
+        winc:
+          '$ref': '#/components/schemas/Winc'
+        adjustments:
+          type: array
+          items:
+            type: object
+        fees:
+          type: array
+          items:
+            type: object
+        actualPaymentAmount:
+          type: integer
+        quotedPaymentAmount:
+          type: integer
+
+    CreditedPaymentTx:
+      type: object
+      properties:
+        transactionId:
+          type: string
+        transactionQuantity:
+          type: integer
+        winstonCreditAmount:
+          type: string
+        winc:
+          type: string
+        status:
+          type: string
+        id:
+          type: string
+        quantity:
+          type: string
+        owner:
+          type: string
+        target:
+          type: string
+        block:
+          type: integer
+        confirmedBlocks:
+          type: integer
+
+paths:
+  /balance:
+    get:
+      tags:
+        - Balance
+      summary: Get Current Balance of winc
+      parameters:
+        - name: address
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/BalanceResponse'
+
+  /price/bytes/{byteCount}:
+    get:
+      tags:
+        - Pricing
+      summary: Get Amount of Credits in winc for Byte Count
+      parameters:
+        - name: byteCount
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/CreditResponse'
+
+  /price/{type}/{amount}:
+    get:
+      tags:
+        - Pricing
+      summary: Get winc for Payment Type and Amount
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - ario
+              - solana
+              - base-eth
+              - arweave
+              - ethereum
+        - name: amount
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/PaymentCreditResponse'
+
+  /account/balance/{token}:
+    post:
+      tags:
+        - Payments
+      summary: Post a pending payment transaction
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - arweave
+              - ario
+              - solana
+              - base-eth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tx_id:
+                  type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  creditedTransaction:
+                    '$ref': '#/components/schemas/CreditedPaymentTx'

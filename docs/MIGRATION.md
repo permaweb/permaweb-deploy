@@ -21,11 +21,13 @@ pnpm install
 ### 2. Command Structure
 
 **Before (v2.x):**
+
 ```bash
 permaweb-deploy --arns-name my-app --undername staging
 ```
 
 **After (v3.x):**
+
 ```bash
 permaweb-deploy deploy --arns-name my-app --undername staging
 ```
@@ -35,6 +37,7 @@ Note the addition of the `deploy` subcommand.
 ### 3. Package.json Scripts
 
 **Before:**
+
 ```json
 {
   "scripts": {
@@ -44,6 +47,7 @@ Note the addition of the `deploy` subcommand.
 ```
 
 **After:**
+
 ```json
 {
   "scripts": {
@@ -55,12 +59,14 @@ Note the addition of the `deploy` subcommand.
 ### 4. GitHub Actions
 
 **Before:**
+
 ```yaml
 - run: npm install
 - run: npm run deploy
 ```
 
 **After:**
+
 ```yaml
 - uses: pnpm/action-setup@v3
   with:
@@ -100,6 +106,7 @@ All flags remain the same:
 ### Functionality
 
 All core functionality remains identical:
+
 - File and folder uploads
 - Manifest creation
 - ANT record updates
@@ -136,30 +143,32 @@ The entire codebase is now in TypeScript with full type definitions.
 ## Step-by-Step Migration
 
 1. **Update package.json**
+
    ```bash
    # Remove old version
    pnpm remove permaweb-deploy
-   
+
    # Install new version
    pnpm add -D permaweb-deploy@^3.0.0
    ```
 
 2. **Update scripts**
-   
+
    Add `deploy` subcommand to all CLI invocations.
 
 3. **Update CI/CD**
-   
+
    Update GitHub Actions to use pnpm.
 
 4. **Test locally**
+
    ```bash
    pnpm build
    DEPLOY_KEY=$(base64 -i wallet.json) pnpm deploy
    ```
 
 5. **Deploy**
-   
+
    Push your changes and test the deployment pipeline.
 
 ## Rollback Plan
@@ -202,4 +211,3 @@ A: Yes, but pnpm is recommended for better performance and disk space usage.
 **Q: Do I need to update my ArNS configuration?**
 
 A: No, ArNS configuration is unchanged.
-

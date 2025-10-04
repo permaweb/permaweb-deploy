@@ -85,6 +85,20 @@ export const globalFlags = {
       return target.type === 'folder' ? target.path : './dist'
     },
   }),
+  // Advanced payment settings
+  maxTokenAmount: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Maximum token amount for on-demand payment',
+      required: false,
+    }),
+  }),
+  onDemand: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Enable on-demand payment with specified token (ario or base-eth)',
+      options: ['ario', 'base-eth'],
+      required: false,
+    }),
+  }),
   privateKey: createFlagConfig<string | undefined>({
     flag: Flags.string({
       char: 'k',
@@ -161,6 +175,8 @@ export const deployFlags = {
   'arns-name': globalFlags.arnsName.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
+  'max-token-amount': globalFlags.maxTokenAmount.flag,
+  'on-demand': globalFlags.onDemand.flag,
   'private-key': globalFlags.privateKey.flag,
   'sig-type': globalFlags.sigType.flag,
   'ttl-seconds': globalFlags.ttlSeconds.flag,
@@ -195,6 +211,8 @@ export interface DeployConfig {
   'arns-name': string
   'deploy-file'?: string
   'deploy-folder': string
+  'max-token-amount'?: string
+  'on-demand'?: string
   'private-key'?: string
   'sig-type': string
   'ttl-seconds': string
@@ -211,6 +229,8 @@ export const deployFlagConfigs = {
   'arns-name': globalFlags.arnsName,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'max-token-amount': globalFlags.maxTokenAmount,
+  'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
   'sig-type': globalFlags.sigType,
   'ttl-seconds': globalFlags.ttlSeconds,

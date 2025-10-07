@@ -70,8 +70,13 @@ jobs:
 
       - name: Create snapshot release
         run: |
-          pnpm run version:snapshot
-          pnpm run release:snapshot
+          if [ "${{ github.event.pull_request.base.ref }}" = "alpha" ]; then
+            pnpm run version:alpha
+            pnpm run release:alpha
+          else
+            pnpm run version:snapshot
+            pnpm run release:snapshot
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

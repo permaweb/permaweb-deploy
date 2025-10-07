@@ -1,0 +1,33 @@
+{
+  "env": {
+    "es2022": true,
+    "node": true
+  },
+  "extends": ["oclif", "oclif-typescript", "plugin:@typescript-eslint/recommended", "prettier"],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "project": "./tsconfig.json"
+  },
+  "plugins": ["@typescript-eslint", "import", "simple-import-sort", "prettier"],
+  "rules": {
+    "prettier/prettier": "error",
+    "simple-import-sort/imports": "error",
+    "simple-import-sort/exports": "error",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "no-console": "off",
+    "complexity": "off",
+    "no-await-in-loop": "off",
+    "unicorn/consistent-destructuring": "off",
+    "perfectionist/sort-imports": "off",
+    "perfectionist/sort-named-imports": "off",
+    "perfectionist/sort-object-types": "off",
+    "perfectionist/sort-interfaces": "off",
+    "perfectionist/sort-union-types": "off",
+    "import/order": "off",
+    "jsdoc/require-returns": "off",
+    "new-cap": "off"
+  }
+}

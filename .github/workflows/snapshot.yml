@@ -1,0 +1,105 @@
+name: Snapshot Release
+
+on:
+  pull_request:
+    branches:
+      - main
+      - alpha
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  snapshot:
+    name: Snapshot Release
+    runs-on: ubuntu-latest
+    # Skip snapshot releases for alpha <-> main PRs (promotion/backport)
+    if: |
+      !((github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'alpha') ||
+        (github.event.pull_request.base.ref == 'alpha' && github.event.pull_request.head.ref == 'main'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate NPM token
+        run: bash ./scripts/check-npm-token.sh
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Setup npm authentication
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
+          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "always-auth=true" >> .npmrc
+
+      - name: Create snapshot release
+        run: |
+          if [ "${{ github.event.pull_request.base.ref }}" = "alpha" ]; then
+            pnpm run version:alpha
+            pnpm run release:alpha
+          else
+            pnpm run version:snapshot
+            pnpm run release:snapshot
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Get Package Version
+        id: package-version
+        if: success()
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Comment PR with snapshot version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            const version = pkg.version;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 Snapshot release published: \`${pkg.name}@${version}\`\n\nInstall with:\n\`\`\`bash\npnpm add ${pkg.name}@${version}\n\`\`\``
+            })

@@ -1,38 +1,109 @@
 {
-	"name": "permaweb-deploy",
-	"version": "2.5.1",
-	"description": "Permaweb App Deployment Package",
-	"main": "index.js",
-	"scripts": {
-		"build": "babel src --out-dir dist"
-	},
-	"bin": {
-		"permaweb-deploy": "./dist/index.js"
-	},
-	"dependencies": {
-		"@ar.io/sdk": "^3.10.1",
-		"@ardrive/turbo-sdk": "^1.28.2",
-		"@permaweb/aoconnect": "^0.0.85",
-		"mime-types": "^3.0.1",
-		"yargs": "17.7.2"
-	},
-	"devDependencies": {
-		"@babel/cli": "^7.23.9",
-		"@babel/core": "^7.23.9",
-		"@babel/eslint-parser": "^7.23.10",
-		"@babel/preset-env": "^7.23.9",
-		"eslint": "^8.35.0",
-		"eslint-plugin-import": "^2.27.5",
-		"eslint-plugin-simple-import-sort": "^10.0.0"
-	},
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/permaweb/permaweb-deploy.git"
-	},
-	"author": "NickJ202",
-	"license": "ISC",
-	"bugs": {
-		"url": "https://github.com/permaweb/permaweb-deploy/issues"
-	},
-	"homepage": "https://github.com/permaweb/permaweb-deploy#readme"
+  "name": "permaweb-deploy",
+  "version": "2.5.1",
+  "description": "Permaweb App Deployment Package",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "bin": {
+    "permaweb-deploy": "./bin/run.js"
+  },
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly",
+    "dev": "./bin/dev.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:unit": "vitest run src",
+    "test:e2e": "vitest run tests/e2e",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "generate:types": "openapi-typescript tests/fixtures/upload-service.openapi.yaml -o tests/types/upload-service.ts && openapi-typescript tests/fixtures/payment-service.openapi.yaml -o tests/types/payment-service.ts",
+    "prepare": "husky install",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "version:alpha": "changeset version --snapshot alpha",
+    "version:snapshot": "changeset version --snapshot rc",
+    "release": "changeset publish --tag latest",
+    "release:alpha": "changeset publish --tag alpha",
+    "release:snapshot": "changeset publish --tag rc --no-git-tag"
+  },
+  "oclif": {
+    "bin": "permaweb-deploy",
+    "dirname": "permaweb-deploy",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "default": "interactive",
+    "topics": {
+      "deploy": {
+        "description": "Deploy to the permaweb"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "oclif.manifest.json"
+  ],
+  "dependencies": {
+    "@ar.io/sdk": "^3.10.1",
+    "@ardrive/turbo-sdk": "^1.32.0",
+    "@inquirer/prompts": "^7.2.0",
+    "@oclif/core": "^4.0.30",
+    "@permaweb/aoconnect": "^0.0.85",
+    "boxen": "^8.0.1",
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "mime-types": "^3.0.1",
+    "ora": "^8.1.1"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.10",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@oclif/prettier-config": "^0.2.1",
+    "@oclif/test": "^4.1.14",
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^8.57.1",
+    "eslint-config-oclif": "^5.2.1",
+    "eslint-config-oclif-typescript": "^3.1.12",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-import-resolver-typescript": "^3.7.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "husky": "^9.1.7",
+    "msw": "^2.11.3",
+    "openapi-typescript": "^7.9.1",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vite-plugin-dts": "^4.3.0",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/permaweb/permaweb-deploy.git"
+  },
+  "author": "NickJ202",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/permaweb/permaweb-deploy/issues"
+  },
+  "homepage": "https://github.com/permaweb/permaweb-deploy#readme"
 }

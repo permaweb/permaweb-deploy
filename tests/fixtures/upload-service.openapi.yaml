@@ -1,0 +1,115 @@
+openapi: 3.1.1
+info:
+  title: Turbo Upload Service
+  version: 0.1.0
+  description: The Turbo Upload Service supports posting signed data-items to Arweave.net using Turbo Credits.
+
+servers:
+  - url: https://upload.ardrive.io/v1
+  - url: https://upload.ardrive.io/
+
+components:
+  schemas:
+    DataItemPost:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The id of the data item.
+          example: 'QpmY8mZmFEC8RxNsgbxSV6e36OF6quIYaPRKzvUco0o'
+        owner:
+          type: string
+          description: The normalized wallet address that signed data item.
+          example: '8wgRDgvYOrtSaWEIV21g0lTuWDUnTu4_iYj4hmA7PI0'
+        dataCaches:
+          type: array
+          description: The Arweave data caches the data item has been posted to.
+          items:
+            type: string
+          example:
+            - arweave.net
+        fastFinalityIndexes:
+          type: array
+          description: The Arweave fast finality indexes the data item has been posted to.
+          items:
+            type: string
+          example:
+            - arweave.net
+        deadlineHeight:
+          type: integer
+          description: The deadline block height for the data item to be posted to Arweave.
+          example: 1310000
+        timestamp:
+          type: integer
+          description: The timestamp in millisecond of when the data item was fully uploaded and receipt was signed.
+          example: 1700590909589
+        version:
+          type: string
+          description: The version of the receipt
+          example: '0.1.0'
+        signature:
+          type: string
+          description: The base64URL signature of the receipt.
+        public:
+          type: string
+          description: The public key of the wallet that signed the receipt
+
+paths:
+  /tx:
+    post:
+      summary: Posts a signed data item to arweave
+      tags:
+        - Upload
+      requestBody:
+        required: true
+        description: A signed data item
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The signed data item was successfully submitted.
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/DataItemPost'
+        '402':
+          description: Insufficient balance
+        '400':
+          description: Invalid data item post
+
+  /tx/{token}:
+    post:
+      summary: Posts a signed data item to arweave for a specific token
+      tags:
+        - Upload
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - arweave
+              - ethereum
+              - solana
+              - ario
+              - base-eth
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: The receipt of the uploaded data item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataItemPost'
+        '402':
+          description: Insufficient balance

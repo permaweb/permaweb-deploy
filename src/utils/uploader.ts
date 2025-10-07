@@ -1,11 +1,14 @@
 import { Readable } from 'node:stream'
 
-import type { TurboAuthenticatedClient } from '@ardrive/turbo-sdk'
+import { OnDemandFunding, type TurboAuthenticatedClient } from '@ardrive/turbo-sdk'
 import * as mime from 'mime-types'
 
 export async function uploadFile(
   turbo: TurboAuthenticatedClient,
   filePath: string,
+  options?: {
+    fundingMode?: OnDemandFunding
+  },
 ): Promise<string> {
   const mimeType = mime.lookup(filePath) || 'application/octet-stream'
 
@@ -27,6 +30,7 @@ export async function uploadFile(
       ],
     },
     file: filePath,
+    ...(options?.fundingMode && { fundingMode: options.fundingMode }),
   })
 
   return uploadResult.id
@@ -35,6 +39,9 @@ export async function uploadFile(
 export async function uploadFolder(
   turbo: TurboAuthenticatedClient,
   folderPath: string,
+  options?: {
+    fundingMode?: OnDemandFunding
+  },
 ): Promise<string> {
   const uploadResult = await turbo.uploadFolder({
     dataItemOpts: {
@@ -50,6 +57,7 @@ export async function uploadFolder(
       ],
     },
     folderPath,
+    ...(options?.fundingMode && { fundingMode: options.fundingMode }),
   })
 
   let txOrManifestId = uploadResult.manifestResponse?.id
@@ -78,6 +86,7 @@ export async function uploadFolder(
       },
       fileSizeFactory: () => buffer.length,
       fileStreamFactory: () => Readable.from(buffer),
+      ...(options?.fundingMode && { fundingMode: options.fundingMode }),
     })
     txOrManifestId = id
   }

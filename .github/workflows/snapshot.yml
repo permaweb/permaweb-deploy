@@ -29,8 +29,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -57,6 +57,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Validate NPM token
+        run: bash ./scripts/check-npm-token.sh
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Setup npm authentication
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
@@ -65,8 +70,8 @@ jobs:
 
       - name: Create snapshot release
         run: |
-          pnpm changeset version --snapshot rc
-          pnpm changeset publish --tag rc --no-git-tag
+          pnpm run version:snapshot
+          pnpm run release:snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

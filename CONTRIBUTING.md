@@ -5,17 +5,20 @@ Thank you for your interest in contributing to Permaweb Deploy! This document pr
 ## Development Setup
 
 1. **Fork and Clone**
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/permaweb-deploy.git
    cd permaweb-deploy
    ```
 
 2. **Install Dependencies**
+
    ```bash
    pnpm install
    ```
 
 3. **Build the Project**
+
    ```bash
    pnpm build
    ```
@@ -30,6 +33,7 @@ Thank you for your interest in contributing to Permaweb Deploy! This document pr
 ### Making Changes
 
 1. Create a new branch:
+
    ```bash
    git checkout -b feat/my-new-feature
    ```
@@ -39,6 +43,7 @@ Thank you for your interest in contributing to Permaweb Deploy! This document pr
 3. Write or update tests as needed
 
 4. Run tests and linter:
+
    ```bash
    pnpm test
    pnpm lint
@@ -61,6 +66,7 @@ footer (optional)
 ```
 
 **Types:**
+
 - `feat`: A new feature
 - `fix`: A bug fix
 - `docs`: Documentation only changes
@@ -74,6 +80,7 @@ footer (optional)
 - `revert`: Reverts a previous commit
 
 **Examples:**
+
 ```
 feat(deploy): add support for batch deployments
 
@@ -91,6 +98,7 @@ pnpm changeset
 ```
 
 This will:
+
 1. Ask you to select the type of change (patch, minor, major)
 2. Prompt you to describe the change
 3. Create a markdown file in `.changeset/` directory
@@ -145,9 +153,9 @@ src/
 ## Questions?
 
 Feel free to:
+
 - Open an issue for bugs or feature requests
 - Start a discussion for questions
 - Reach out to the maintainers
 
 Thank you for contributing! 🚀
-

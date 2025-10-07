@@ -13,17 +13,22 @@
     "dev": "./bin/dev.js",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:unit": "vitest run src",
+    "test:e2e": "vitest run tests/e2e",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "generate:types": "openapi-typescript tests/fixtures/upload-service.openapi.yaml -o tests/types/upload-service.ts && openapi-typescript tests/fixtures/payment-service.openapi.yaml -o tests/types/payment-service.ts",
     "prepare": "husky install",
     "changeset": "changeset",
     "version": "changeset version",
     "version:alpha": "changeset version --snapshot alpha",
+    "version:snapshot": "changeset version --snapshot rc",
     "release": "changeset publish",
-    "release:alpha": "changeset publish --tag alpha"
+    "release:alpha": "changeset publish --tag alpha",
+    "release:snapshot": "changeset publish --tag rc --no-git-tag"
   },
   "oclif": {
     "bin": "permaweb-deploy",
@@ -44,7 +49,7 @@
   ],
   "dependencies": {
     "@ar.io/sdk": "^3.10.1",
-    "@ardrive/turbo-sdk": "^1.28.2",
+    "@ardrive/turbo-sdk": "^1.32.0",
     "@inquirer/prompts": "^7.2.0",
     "@oclif/core": "^4.0.30",
     "@permaweb/aoconnect": "^0.0.85",
@@ -59,6 +64,7 @@
     "@commitlint/cli": "^19.6.0",
     "@commitlint/config-conventional": "^19.6.0",
     "@oclif/prettier-config": "^0.2.1",
+    "@oclif/test": "^4.1.14",
     "@types/mime-types": "^2.1.4",
     "@types/node": "^22.10.2",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
@@ -73,6 +79,8 @@
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "husky": "^9.1.7",
+    "msw": "^2.11.3",
+    "openapi-typescript": "^7.9.1",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
@@ -80,6 +88,10 @@
     "vite-plugin-dts": "^4.3.0",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -5,6 +5,8 @@ import { validateArioProcess, validateArnsName, validateTtl } from '../utils/val
 
 export interface AdvancedOptions {
   arioProcess: string
+  maxTokenAmount?: string
+  onDemand?: string
   ttlSeconds: string
   undername: string
 }
@@ -67,8 +69,41 @@ export async function promptAdvancedOptions(): Promise<AdvancedOptions | null> {
   const ttlSeconds = await promptTtl()
   const arioProcess = await promptArioProcess()
 
+  // On-demand payment options
+  const wantsOnDemand = await confirm({
+    default: false,
+    message: 'Enable on-demand payment?',
+  })
+
+  let onDemand: string | undefined
+  let maxTokenAmount: string | undefined
+
+  if (wantsOnDemand) {
+    onDemand = await select({
+      choices: [
+        { name: 'ARIO', value: 'ario' },
+        { name: 'ETH (Base Network)', value: 'base-eth' },
+      ],
+      message: 'Select payment token:',
+    })
+
+    maxTokenAmount = await input({
+      message: 'Enter maximum token amount:',
+      validate(value: string) {
+        const num = Number.parseFloat(value)
+        if (Number.isNaN(num) || num <= 0) {
+          return 'Please enter a valid positive number'
+        }
+
+        return true
+      },
+    })
+  }
+
   return {
     arioProcess,
+    maxTokenAmount,
+    onDemand,
     ttlSeconds,
     undername,
   }

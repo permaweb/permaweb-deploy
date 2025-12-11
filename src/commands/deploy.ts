@@ -227,59 +227,81 @@ export default class Deploy extends Command {
         if (!fundingMode) {
           spinner.start('Checking Turbo credits for upload')
 
-          // Figure out how many bytes we’re about to upload
-          const uploadBytes = deployConfig['deploy-file']
-            ? (() => {
-                const filePath = expandPath(deployConfig['deploy-file']!)
-                return fs.statSync(filePath).size
-              })()
-            : (() => {
-                const folderPath = expandPath(deployConfig['deploy-folder']!)
-                return getFolderSize(folderPath)
-              })()
+          try {
+            // Figure out how many bytes we're about to upload
+            const uploadBytes = deployConfig['deploy-file']
+              ? (() => {
+                  const filePath = expandPath(deployConfig['deploy-file']!)
+                  return fs.statSync(filePath).size
+                })()
+              : (() => {
+                  const folderPath = expandPath(deployConfig['deploy-folder']!)
+                  return getFolderSize(folderPath)
+                })()
 
-          const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
+            const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
 
-          if (uploadBytes >= FREE_THRESHOLD_BYTES) {
-            // Ask Turbo how many winc this upload will cost, and compare to current balance
-            const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
-            const balance = await turbo.getBalance()
+            if (uploadBytes >= FREE_THRESHOLD_BYTES) {
+              // Ask Turbo how many winc this upload will cost, and compare to current balance
+              const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
+              const balance = await turbo.getBalance()
 
-            // These come back as strings; treat them as big integers
-            const requiredWinc = BigInt(uploadCost.winc)
-            const currentWinc = BigInt(balance.winc)
+              // These come back as strings; treat them as big integers
+              const requiredWinc = BigInt(uploadCost.winc)
+              const currentWinc = BigInt(balance.winc)
 
-            if (requiredWinc > currentWinc) {
-              spinner.fail('Insufficient Turbo credits')
+              if (requiredWinc > currentWinc) {
+                spinner.fail('Insufficient Turbo credits')
 
-              this.error(
-                [
-                  'Insufficient Turbo credits for this upload.',
-                  `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
-                  '',
-                  'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
-                ].join(' '),
-              )
+                this.error(
+                  [
+                    'Insufficient Turbo credits for this upload.',
+                    `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
+                    '',
+                    'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
+                  ].join(' '),
+                )
+              }
             }
-          }
 
-          spinner.succeed('Turbo credits check passed')
+            spinner.succeed('Turbo credits check passed')
+          } catch (balanceError) {
+            spinner.fail('Failed to check Turbo credits')
+            const errorMessage =
+              balanceError instanceof Error ? balanceError.message : String(balanceError)
+            this.error(`Failed to check Turbo credits: ${errorMessage}`)
+          }
         }
         // Upload file or folder
         let txOrManifestId: string
-        if (deployConfig['deploy-file']) {
-          const filePath = expandPath(deployConfig['deploy-file'])
-          spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
-          txOrManifestId = await uploadFile(turbo, filePath, { fundingMode })
-          spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
-        } else {
-          const folderPath = expandPath(deployConfig['deploy-folder'])
-          spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-          txOrManifestId = await uploadFolder(turbo, folderPath, {
-            fundingMode,
-            throwOnFailure: true,
-          })
-          spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
+        try {
+          if (deployConfig['deploy-file']) {
+            const filePath = expandPath(deployConfig['deploy-file'])
+            spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
+            txOrManifestId = await uploadFile(turbo, filePath, { fundingMode })
+            if (!txOrManifestId) {
+              spinner.fail('File upload failed: no transaction ID returned')
+              this.error('File upload failed: no transaction ID returned')
+            }
+            spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
+          } else {
+            const folderPath = expandPath(deployConfig['deploy-folder'])
+            spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
+            txOrManifestId = await uploadFolder(turbo, folderPath, {
+              fundingMode,
+              throwOnFailure: true,
+            })
+            if (!txOrManifestId) {
+              spinner.fail('Folder upload failed: no transaction ID returned')
+              this.error('Folder upload failed: no transaction ID returned')
+            }
+            spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
+          }
+        } catch (uploadError) {
+          spinner.fail('Upload failed')
+          const errorMessage =
+            uploadError instanceof Error ? uploadError.message : String(uploadError)
+          this.error(`Upload failed: ${errorMessage}`)
         }
 
         this.log('')

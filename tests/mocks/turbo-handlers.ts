@@ -502,13 +502,24 @@ export function mockUploadFailure(status = 500, message = 'Upload failed') {
 
 /**
  * Helper to create insufficient balance scenario
- * @param winc - Balance amount in winc
- * @returns MSW handler for insufficient balance
+ * @param balanceWinc - Balance amount in winc (default: low balance)
+ * @param costWinc - Upload cost in winc (default: higher than balance)
+ * @returns Array of MSW handlers for insufficient balance scenario
  */
-export function mockInsufficientBalance(winc = '100') {
-  return http.get('https://payment.ardrive.io/v1/account/balance/:token', async () =>
-    HttpResponse.json(mockTurboData.balanceResponse(winc)),
-  )
+export function mockInsufficientBalance(balanceWinc = '100', costWinc = '1000000') {
+  return [
+    // Mock low balance - both balance endpoints
+    http.get('https://payment.ardrive.io/v1/balance', async () =>
+      HttpResponse.json(mockTurboData.balanceResponse(balanceWinc)),
+    ),
+    http.get('https://payment.ardrive.io/v1/account/balance/:token', async () =>
+      HttpResponse.json(mockTurboData.balanceResponse(balanceWinc)),
+    ),
+    // Mock high upload cost (higher than balance)
+    http.get('https://payment.ardrive.io/v1/price/bytes/:byteCount', async () =>
+      HttpResponse.json(mockTurboData.priceResponse(costWinc)),
+    ),
+  ]
 }
 
 /**

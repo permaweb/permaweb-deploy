@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-
+import path from 'node:path'
 import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
 import {
   ARIOToTokenAmount,
@@ -22,6 +22,19 @@ import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
 import { uploadFile, uploadFolder } from '../utils/uploader.js'
+
+function getFolderSize(folderPath: string): number {
+  return fs.readdirSync(folderPath).reduce((totalSize, item) => {
+    const fullPath = path.join(folderPath, item)
+    const stats = fs.statSync(fullPath)
+
+    if (stats.isDirectory()) {
+      return totalSize + getFolderSize(fullPath)
+    }
+
+    return totalSize + stats.size
+  }, 0)
+}
 
 export default class Deploy extends Command {
   static override args = {}
@@ -211,6 +224,47 @@ export default class Deploy extends Command {
           })
         }
 
+        if (!fundingMode) {
+          spinner.start('Checking Turbo credits for upload')
+
+          // Figure out how many bytes we’re about to upload
+          const uploadBytes = deployConfig['deploy-file']
+            ? (() => {
+                const filePath = expandPath(deployConfig['deploy-file']!)
+                return fs.statSync(filePath).size
+              })()
+            : (() => {
+                const folderPath = expandPath(deployConfig['deploy-folder']!)
+                return getFolderSize(folderPath)
+              })()
+
+          const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
+
+          if (uploadBytes >= FREE_THRESHOLD_BYTES) {
+            // Ask Turbo how many winc this upload will cost, and compare to current balance
+            const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
+            const balance = await turbo.getBalance()
+
+            // These come back as strings; treat them as big integers
+            const requiredWinc = BigInt(uploadCost.winc)
+            const currentWinc = BigInt(balance.winc)
+
+            if (requiredWinc > currentWinc) {
+              spinner.fail('Insufficient Turbo credits')
+
+              this.error(
+                [
+                  'Insufficient Turbo credits for this upload.',
+                  `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
+                  '',
+                  'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
+                ].join(' '),
+              )
+            }
+          }
+
+          spinner.succeed('Turbo credits check passed')
+        }
         // Upload file or folder
         let txOrManifestId: string
         if (deployConfig['deploy-file']) {
@@ -221,7 +275,10 @@ export default class Deploy extends Command {
         } else {
           const folderPath = expandPath(deployConfig['deploy-folder'])
           spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-          txOrManifestId = await uploadFolder(turbo, folderPath, { fundingMode })
+          txOrManifestId = await uploadFolder(turbo, folderPath, {
+            fundingMode,
+            throwOnFailure: true,
+          })
           spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
         }
 

@@ -41,6 +41,7 @@ export async function uploadFolder(
   folderPath: string,
   options?: {
     fundingMode?: OnDemandFunding
+    throwOnFailure?: boolean
   },
 ): Promise<string> {
   const uploadResult = await turbo.uploadFolder({
@@ -57,7 +58,10 @@ export async function uploadFolder(
       ],
     },
     folderPath,
-    ...(options?.fundingMode && { fundingMode: options.fundingMode }),
+    ...(options?.fundingMode && {
+      fundingMode: options.fundingMode,
+      throwOnFailure: options.throwOnFailure,
+    }),
   })
 
   let txOrManifestId = uploadResult.manifestResponse?.id

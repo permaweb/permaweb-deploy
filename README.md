@@ -272,6 +272,7 @@ jobs:
 ```
 
 When `preview` is enabled, the action will:
+
 - Auto-generate an undername like `pr-123` from the PR number
 - Post a comment on the PR with the preview URL
 - Update the comment on subsequent pushes instead of creating new ones

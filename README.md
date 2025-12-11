@@ -219,9 +219,118 @@ Or with on-demand payment:
 DEPLOY_KEY=$(base64 -i wallet.json) pnpm deploy:on-demand
 ```
 
-## GitHub Actions Workflow
+## GitHub Action
 
-To automate deployments, set up a GitHub Actions workflow:
+The easiest way to integrate permaweb-deploy into your CI/CD pipeline is using our official GitHub Action.
+
+### Basic Usage
+
+```yaml
+- uses: permaweb/permaweb-deploy@v1
+  with:
+    deploy-key: ${{ secrets.DEPLOY_KEY }}
+    arns-name: myapp
+    deploy-folder: ./dist
+```
+
+### PR Preview Deployments
+
+Automatically deploy preview builds for each pull request. The `preview` mode auto-generates an undername from the PR number and posts a comment with the preview URL:
+
+```yaml
+name: Deploy PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy Preview
+        uses: permaweb/permaweb-deploy@v1
+        with:
+          deploy-key: ${{ secrets.DEPLOY_KEY }}
+          arns-name: myapp
+          preview: 'true'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-folder: ./dist
+```
+
+When `preview` is enabled, the action will:
+
+- Auto-generate an undername like `pr-123` from the PR number
+- Post a comment on the PR with the preview URL
+- Update the comment on subsequent pushes instead of creating new ones
+
+### Production Deployment
+
+Deploy to your base ArNS name when pushing to main:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Permaweb
+        uses: permaweb/permaweb-deploy@v1
+        with:
+          deploy-key: ${{ secrets.DEPLOY_KEY }}
+          arns-name: myapp
+          deploy-folder: ./dist
+```
+
+### With On-Demand Payment
+
+```yaml
+- name: Deploy with ARIO on-demand
+  uses: permaweb/permaweb-deploy@v1
+  with:
+    deploy-key: ${{ secrets.DEPLOY_KEY }}
+    arns-name: myapp
+    deploy-folder: ./dist
+    on-demand: ario
+    max-token-amount: '2.0'
+```
+
+---
+
+## CLI in GitHub Actions
+
+You can also use the CLI directly in your workflows:
 
 **Basic Workflow:**
 

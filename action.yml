@@ -1,0 +1,217 @@
+name: 'Permaweb Deploy'
+description: 'Deploy static sites to Arweave and update ArNS records. Perfect for PR previews and production deployments.'
+author: 'permaweb'
+branding:
+  icon: 'upload-cloud'
+  color: 'blue'
+
+inputs:
+  deploy-key:
+    description: 'Base64-encoded Arweave JWK wallet (for Arweave signer) or raw private key (for Ethereum/Polygon/KYVE signers)'
+    required: true
+  arns-name:
+    description: 'The ArNS name to update (e.g., "myapp" for myapp.arweave.net)'
+    required: true
+  undername:
+    description: 'The undername to use. Use "@" for base name, or a custom value for undernames (e.g., "docs" for docs_myapp.arweave.net)'
+    required: false
+    default: '@'
+  deploy-folder:
+    description: 'Path to the folder containing built static files to deploy'
+    required: false
+    default: './dist'
+  deploy-file:
+    description: 'Path to a single file to deploy (alternative to deploy-folder)'
+    required: false
+  ttl-seconds:
+    description: 'TTL in seconds for the ANT record (60-86400)'
+    required: false
+    default: '3600'
+  sig-type:
+    description: 'Signer type for deployment (arweave, ethereum, polygon, kyve)'
+    required: false
+    default: 'arweave'
+  ario-process:
+    description: 'ARIO process to use (mainnet, testnet, or a custom process ID)'
+    required: false
+    default: 'mainnet'
+  on-demand:
+    description: 'Enable on-demand payment with specified token (ario or base-eth)'
+    required: false
+  max-token-amount:
+    description: 'Maximum token amount for on-demand payment (used with on-demand)'
+    required: false
+  preview:
+    description: 'Enable preview mode: auto-generates undername from PR number and posts a comment with the preview URL'
+    required: false
+    default: 'false'
+  auto-undername:
+    description: 'Automatically generate undername from PR number or branch name (use preview for full PR preview functionality)'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'GitHub token for posting PR comments (required when preview is enabled)'
+    required: false
+
+outputs:
+  tx-id:
+    description: 'The Arweave transaction ID of the uploaded content'
+    value: ${{ steps.deploy.outputs.tx-id }}
+  deployment-url:
+    description: 'The full URL where the deployment is accessible'
+    value: ${{ steps.deploy.outputs.deployment-url }}
+  undername-used:
+    description: 'The undername that was used for the deployment'
+    value: ${{ steps.deploy.outputs.undername-used }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install permaweb-deploy
+      shell: bash
+      run: npm install -g permaweb-deploy
+
+    - name: Determine undername
+      id: undername
+      shell: bash
+      run: |
+        UNDERNAME="${{ inputs.undername }}"
+        AUTO_UNDERNAME="${{ inputs.auto-undername }}"
+        PREVIEW="${{ inputs.preview }}"
+
+        # Preview mode implies auto-undername
+        if [[ "$PREVIEW" == "true" ]]; then
+          AUTO_UNDERNAME="true"
+        fi
+
+        if [[ "$AUTO_UNDERNAME" == "true" && "$UNDERNAME" == "@" ]]; then
+          # Check if this is a pull request
+          if [[ -n "${{ github.event.pull_request.number }}" ]]; then
+            UNDERNAME="pr-${{ github.event.pull_request.number }}"
+            echo "Auto-generated undername from PR: $UNDERNAME"
+          elif [[ -n "${{ github.ref_name }}" && "${{ github.ref_name }}" != "main" && "${{ github.ref_name }}" != "master" ]]; then
+            # Sanitize branch name for use as undername
+            UNDERNAME=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-61)
+            echo "Auto-generated undername from branch: $UNDERNAME"
+          fi
+        fi
+
+        echo "undername=$UNDERNAME" >> $GITHUB_OUTPUT
+
+    - name: Deploy to Permaweb
+      id: deploy
+      shell: bash
+      env:
+        DEPLOY_KEY: ${{ inputs.deploy-key }}
+      run: |
+        # Build command arguments
+        ARGS="--arns-name ${{ inputs.arns-name }}"
+        ARGS="$ARGS --undername ${{ steps.undername.outputs.undername }}"
+        ARGS="$ARGS --ttl-seconds ${{ inputs.ttl-seconds }}"
+        ARGS="$ARGS --sig-type ${{ inputs.sig-type }}"
+        ARGS="$ARGS --ario-process ${{ inputs.ario-process }}"
+
+        # Add deploy-folder or deploy-file
+        if [[ -n "${{ inputs.deploy-file }}" ]]; then
+          ARGS="$ARGS --deploy-file ${{ inputs.deploy-file }}"
+        else
+          ARGS="$ARGS --deploy-folder ${{ inputs.deploy-folder }}"
+        fi
+
+        # Add on-demand payment options if specified
+        if [[ -n "${{ inputs.on-demand }}" ]]; then
+          ARGS="$ARGS --on-demand ${{ inputs.on-demand }}"
+          if [[ -n "${{ inputs.max-token-amount }}" ]]; then
+            ARGS="$ARGS --max-token-amount ${{ inputs.max-token-amount }}"
+          fi
+        fi
+
+        echo "Running: permaweb-deploy deploy $ARGS"
+
+        # Run deploy and capture output
+        OUTPUT=$(permaweb-deploy deploy $ARGS 2>&1) || {
+          echo "Deployment failed"
+          echo "$OUTPUT"
+          exit 1
+        }
+
+        echo "$OUTPUT"
+
+        # Extract transaction ID from output (look for "Tx ID" in the table)
+        TX_ID=$(echo "$OUTPUT" | grep -oP 'Tx ID\s*│\s*\K[a-zA-Z0-9_-]{43}' || echo "")
+        if [[ -z "$TX_ID" ]]; then
+          # Try alternative patterns
+          TX_ID=$(echo "$OUTPUT" | grep -oE '[a-zA-Z0-9_-]{43}' | head -1 || echo "")
+        fi
+
+        echo "tx-id=$TX_ID" >> $GITHUB_OUTPUT
+        echo "undername-used=${{ steps.undername.outputs.undername }}" >> $GITHUB_OUTPUT
+
+        # Build deployment URL
+        ARNS_NAME="${{ inputs.arns-name }}"
+        UNDERNAME="${{ steps.undername.outputs.undername }}"
+        if [[ "$UNDERNAME" == "@" ]]; then
+          DEPLOYMENT_URL="https://${ARNS_NAME}.arweave.net"
+        else
+          DEPLOYMENT_URL="https://${UNDERNAME}_${ARNS_NAME}.arweave.net"
+        fi
+
+        echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        echo "Deployment URL: $DEPLOYMENT_URL"
+
+    - name: Comment on PR
+      if: inputs.preview == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const deploymentUrl = '${{ steps.deploy.outputs.deployment-url }}';
+          const txId = '${{ steps.deploy.outputs.tx-id }}';
+          const undername = '${{ steps.deploy.outputs.undername-used }}';
+          const arnsName = '${{ inputs.arns-name }}';
+
+          const body = `## Permaweb Preview Deployed
+
+          Your preview is available at: **${deploymentUrl}**
+
+          | Property | Value |
+          |----------|-------|
+          | Transaction ID | \`${txId}\` |
+          | ArNS Name | ${arnsName} |
+          | Undername | ${undername} |
+
+          > This preview will be available permanently on Arweave.`;
+
+          // Find existing comment
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+
+          const botComment = comments.find(comment =>
+            comment.body.includes('Permaweb Preview Deployed')
+          );
+
+          if (botComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: body
+            });
+          } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+          }

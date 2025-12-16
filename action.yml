@@ -7,7 +7,7 @@ branding:
 
 inputs:
   deploy-key:
-    description: 'Base64-encoded Arweave JWK wallet (for Arweave signer) or raw private key (for Ethereum/Polygon/KYVE signers)'
+    description: 'Arweave JWK wallet (base64-encoded or JSON string) for Arweave signer, or raw private key for Ethereum/Polygon/KYVE signers'
     required: true
   arns-name:
     description: 'The ArNS name to update (e.g., "myapp" for myapp.arweave.net)'
@@ -109,6 +109,16 @@ runs:
       env:
         DEPLOY_KEY: ${{ inputs.deploy-key }}
       run: |
+        # Handle deploy key format (base64 or JSON)
+        if [[ "$DEPLOY_KEY" =~ ^[A-Za-z0-9+/]+=*$ ]]; then
+          # Looks like base64, use as is
+          echo "Deploy key appears to be base64 encoded"
+        elif [[ "$DEPLOY_KEY" =~ ^\{.*\}$ ]]; then
+          # JSON format, encode to base64
+          echo "Deploy key is JSON, encoding to base64"
+          DEPLOY_KEY=$(echo -n "$DEPLOY_KEY" | base64)
+        fi
+
         # Build command arguments
         ARGS="--arns-name ${{ inputs.arns-name }}"
         ARGS="$ARGS --undername ${{ steps.undername.outputs.undername }}"
@@ -156,9 +166,9 @@ runs:
         ARNS_NAME="${{ inputs.arns-name }}"
         UNDERNAME="${{ steps.undername.outputs.undername }}"
         if [[ "$UNDERNAME" == "@" ]]; then
-          DEPLOYMENT_URL="https://${ARNS_NAME}.arweave.net"
+          DEPLOYMENT_URL="https://${ARNS_NAME}.ar.io"
         else
-          DEPLOYMENT_URL="https://${UNDERNAME}_${ARNS_NAME}.arweave.net"
+          DEPLOYMENT_URL="https://${UNDERNAME}_${ARNS_NAME}.ar.io"
         fi
 
         echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
@@ -185,7 +195,7 @@ runs:
           | ArNS Name | ${arnsName} |
           | Undername | ${undername} |
 
-          > This preview will be available permanently on Arweave.`;
+          > This preview will be available permanently on Arweave via the [AR.IO Network](https://ar.io).`;
 
           // Find existing comment
           const { data: comments } = await github.rest.issues.listComments({
@@ -215,3 +225,94 @@ runs:
               body: body
             });
           }
+
+    - name: Delete undername on PR close
+      if: github.event_name == 'pull_request' && github.event.action == 'closed' && steps.undername.outputs.undername != '@' && (inputs.auto-undername == 'true' || inputs.preview == 'true')
+      shell: bash
+      env:
+        DEPLOY_KEY: ${{ inputs.deploy-key }}
+      run: |
+        UNDERNAME="${{ steps.undername.outputs.undername }}"
+
+        # Safety check: never delete the @ undername (base record)
+        if [[ "$UNDERNAME" == "@" ]]; then
+          echo "Safety check: Cannot delete the base record (@). Skipping deletion."
+          exit 0
+        fi
+
+        echo "Deleting undername '$UNDERNAME' for ArNS name '${{ inputs.arns-name }}'..."
+
+        # Handle deploy key format (base64 or JSON)
+        if [[ "$DEPLOY_KEY" =~ ^[A-Za-z0-9+/]+=*$ ]]; then
+          # Already base64, use as is
+          echo "Deploy key is already base64 encoded"
+        elif [[ "$DEPLOY_KEY" =~ ^\{.*\}$ ]]; then
+          # JSON format, encode to base64
+          echo "Deploy key is JSON, encoding to base64"
+          DEPLOY_KEY=$(echo -n "$DEPLOY_KEY" | base64)
+        fi
+
+        # Get the ANT process ID for the ArNS name
+        echo "Getting ArNS record to find ANT process ID..."
+        PROCESS_ID=$(ar.io get-arns-record --name "${{ inputs.arns-name }}" --json | jq -r '.processId' 2>/dev/null) || {
+          echo "Warning: Failed to get ArNS record. The record may not exist."
+          exit 0
+        }
+
+        if [[ -z "$PROCESS_ID" || "$PROCESS_ID" == "null" ]]; then
+          echo "Warning: No process ID found for ArNS name '${{ inputs.arns-name }}'"
+          exit 0
+        fi
+
+        echo "Found ANT process ID: $PROCESS_ID"
+
+        # Remove the undername from the ANT
+        ar.io remove-ant-record \
+          --process-id "$PROCESS_ID" \
+          --undername "${{ steps.undername.outputs.undername }}" \
+          --private-key "$DEPLOY_KEY" \
+          2>&1 || {
+          echo "Warning: Failed to delete undername. It may have already been deleted or may not exist."
+          # Don't fail the workflow if deletion fails
+        }
+
+    - name: Comment on PR close
+      if: github.event_name == 'pull_request' && github.event.action == 'closed' && inputs.github-token != ''
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const undername = '${{ steps.undername.outputs.undername }}';
+          const arnsName = '${{ inputs.arns-name }}';
+          let deploymentUrl;
+
+          if (undername === '@') {
+            deploymentUrl = `https://${arnsName}.ar.io`;
+          } else {
+            deploymentUrl = `https://${undername}_${arnsName}.ar.io`;
+          }
+
+          let body;
+          if (undername !== '@') {
+            body = `## Pull Request Closed
+
+          This PR has been closed. The undername \`${undername}\` has been removed from the ArNS record.
+
+          The deployment remains permanently available on Arweave at its transaction ID.
+
+          > Note: The preview URL (${deploymentUrl}) is no longer accessible as the undername has been deleted.`;
+          } else {
+            body = `## Pull Request Closed
+
+          This PR has been closed. The deployment remains available at:
+          **${deploymentUrl}**
+
+          > Arweave deployments are permanent and will continue to be accessible.`;
+          }
+
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body
+          });

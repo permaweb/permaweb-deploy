@@ -99,6 +99,7 @@ export async function uploadFolder(
     if (!manifestUploadResult?.id) {
       throw new Error('Failed to upload manifest: upload result missing transaction ID')
     }
+
     txOrManifestId = manifestUploadResult.id
   }
 

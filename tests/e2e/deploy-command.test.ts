@@ -321,6 +321,7 @@ describe(
         if (!fs.existsSync(largeFolderPath)) {
           fs.mkdirSync(largeFolderPath, { recursive: true })
         }
+
         const largeFilePath = path.join(largeFolderPath, 'large-file.bin')
         fs.writeFileSync(largeFilePath, largeFileBuffer)
 
@@ -343,7 +344,7 @@ describe(
         } finally {
           // Clean up test folder
           if (fs.existsSync(largeFolderPath)) {
-            fs.rmSync(largeFolderPath, { recursive: true, force: true })
+            fs.rmSync(largeFolderPath, { force: true, recursive: true })
           }
         }
       })

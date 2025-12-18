@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+
 import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
 import {
   ARIOToTokenAmount,
@@ -272,6 +273,7 @@ export default class Deploy extends Command {
             this.error(`Failed to check Turbo credits: ${errorMessage}`)
           }
         }
+
         // Upload file or folder
         let txOrManifestId: string
         try {
@@ -283,6 +285,7 @@ export default class Deploy extends Command {
               spinner.fail('File upload failed: no transaction ID returned')
               this.error('File upload failed: no transaction ID returned')
             }
+
             spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
           } else {
             const folderPath = expandPath(deployConfig['deploy-folder'])
@@ -295,6 +298,7 @@ export default class Deploy extends Command {
               spinner.fail('Folder upload failed: no transaction ID returned')
               this.error('Folder upload failed: no transaction ID returned')
             }
+
             spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
           }
         } catch (uploadError) {

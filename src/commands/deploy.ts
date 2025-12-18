@@ -25,16 +25,16 @@ import { createSigner } from '../utils/signer.js'
 import { uploadFile, uploadFolder } from '../utils/uploader.js'
 
 function getFolderSize(folderPath: string): number {
-  return fs.readdirSync(folderPath).reduce((totalSize, item) => {
+  let totalSize = 0
+
+  for (const item of fs.readdirSync(folderPath)) {
     const fullPath = path.join(folderPath, item)
     const stats = fs.statSync(fullPath)
 
-    if (stats.isDirectory()) {
-      return totalSize + getFolderSize(fullPath)
-    }
+    totalSize += stats.isDirectory() ? getFolderSize(fullPath) : stats.size
+  }
 
-    return totalSize + stats.size
-  }, 0)
+  return totalSize
 }
 
 export default class Deploy extends Command {

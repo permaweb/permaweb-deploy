@@ -1,6 +1,6 @@
 {
   "name": "permaweb-deploy",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "Permaweb App Deployment Package",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

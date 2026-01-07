@@ -33,6 +33,10 @@ export async function uploadFile(
     ...(options?.fundingMode && { fundingMode: options.fundingMode }),
   })
 
+  if (!uploadResult?.id) {
+    throw new Error('Failed to upload file: upload result missing transaction ID')
+  }
+
   return uploadResult.id
 }
 
@@ -41,6 +45,7 @@ export async function uploadFolder(
   folderPath: string,
   options?: {
     fundingMode?: OnDemandFunding
+    throwOnFailure?: boolean
   },
 ): Promise<string> {
   const uploadResult = await turbo.uploadFolder({
@@ -57,7 +62,10 @@ export async function uploadFolder(
       ],
     },
     folderPath,
-    ...(options?.fundingMode && { fundingMode: options.fundingMode }),
+    ...(options?.fundingMode && {
+      fundingMode: options.fundingMode,
+      throwOnFailure: options.throwOnFailure,
+    }),
   })
 
   let txOrManifestId = uploadResult.manifestResponse?.id
@@ -80,7 +88,7 @@ export async function uploadFolder(
     console.info('Replacing manifest to support directory indexes')
     const newManifest = { ...uploadResult.manifest, paths: newPaths }
     const buffer = Buffer.from(JSON.stringify(newManifest))
-    const { id } = await turbo.uploadFile({
+    const manifestUploadResult = await turbo.uploadFile({
       dataItemOpts: {
         tags: [{ name: 'Content-Type', value: 'application/x.arweave-manifest+json' }],
       },
@@ -88,7 +96,11 @@ export async function uploadFolder(
       fileStreamFactory: () => Readable.from(buffer),
       ...(options?.fundingMode && { fundingMode: options.fundingMode }),
     })
-    txOrManifestId = id
+    if (!manifestUploadResult?.id) {
+      throw new Error('Failed to upload manifest: upload result missing transaction ID')
+    }
+
+    txOrManifestId = manifestUploadResult.id
   }
 
   if (!txOrManifestId) {

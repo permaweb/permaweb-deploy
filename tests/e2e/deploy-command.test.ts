@@ -65,6 +65,43 @@ describe(
       expect(result.error?.message).toMatch(/valid Arweave transaction ID/)
     })
 
+    it('should reject invalid cache-max-entries', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-folder',
+        './tests/fixtures/test-app',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--arns-name',
+        'test-app',
+        '--undername',
+        '@',
+        '--cache-max-entries',
+        '0',
+      ])
+
+      expect(result.error).toBeDefined()
+      expect(result.error?.message).toMatch(/Expected an integer greater than or equal to 1/)
+    })
+
+    it('should accept valid cache-max-entries', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-folder',
+        './tests/fixtures/test-app',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--arns-name',
+        'test-app',
+        '--undername',
+        '@',
+        '--cache-max-entries',
+        '50',
+      ])
+
+      expect(result.error).toBeUndefined()
+    })
+
     describe('arweave signer', () => {
       describe('upload folder', () => {
         it('should deploy without payment', async () => {
@@ -266,6 +303,132 @@ describe(
 
           expect(result.error).toBeUndefined()
         })
+      })
+    })
+
+    describe('caching', () => {
+      it('should cache file uploads and reuse on subsequent deploys', async () => {
+        const fs = await import('node:fs')
+        const path = await import('node:path')
+
+        // Clean up any existing cache
+        const cacheDir = path.join(process.cwd(), '.permaweb-deploy')
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+
+        // First deploy - should upload and cache
+        const result1 = await runCommand([
+          'deploy',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--arns-name',
+          'test-app',
+          '--undername',
+          '@',
+          '--cache-max-entries',
+          '10',
+        ])
+
+        expect(result1.error).toBeUndefined()
+
+        // Check cache was created
+        const cachePath = path.join(cacheDir, 'transaction-cache.json')
+        expect(fs.existsSync(cachePath)).toBe(true)
+
+        const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
+        const entries = Object.keys(cache)
+        expect(entries.length).toBe(1)
+
+        // Second deploy - should use cache
+        const result2 = await runCommand([
+          'deploy',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--arns-name',
+          'test-app',
+          '--undername',
+          '@',
+          '--cache-max-entries',
+          '10',
+        ])
+
+        expect(result2.error).toBeUndefined()
+
+        // Cache should still have same entry (not duplicated)
+        const cache2 = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
+        expect(Object.keys(cache2).length).toBe(1)
+
+        // Clean up
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+      })
+
+      it('should cache folder uploads and reuse on subsequent deploys', async () => {
+        const fs = await import('node:fs')
+        const path = await import('node:path')
+
+        // Clean up any existing cache
+        const cacheDir = path.join(process.cwd(), '.permaweb-deploy')
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+
+        // First deploy - should upload and cache
+        const result1 = await runCommand([
+          'deploy',
+          '--deploy-folder',
+          './tests/fixtures/test-app',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--arns-name',
+          'test-app',
+          '--undername',
+          '@',
+          '--cache-max-entries',
+          '10',
+        ])
+
+        expect(result1.error).toBeUndefined()
+
+        // Check cache was created
+        const cachePath = path.join(cacheDir, 'transaction-cache.json')
+        expect(fs.existsSync(cachePath)).toBe(true)
+
+        const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
+        const entries = Object.keys(cache)
+        expect(entries.length).toBe(1)
+
+        // Second deploy - should use cache
+        const result2 = await runCommand([
+          'deploy',
+          '--deploy-folder',
+          './tests/fixtures/test-app',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--arns-name',
+          'test-app',
+          '--undername',
+          '@',
+          '--cache-max-entries',
+          '10',
+        ])
+
+        expect(result2.error).toBeUndefined()
+
+        // Cache should still have same entry (not duplicated)
+        const cache2 = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
+        expect(Object.keys(cache2).length).toBe(1)
+
+        // Clean up
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
       })
     })
 

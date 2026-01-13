@@ -19,6 +19,7 @@ import { type DeployConfig, deployFlagConfigs } from '../constants/flags.js'
 import { promptAdvancedOptions } from '../prompts/arns.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
+import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
@@ -105,6 +106,7 @@ export default class Deploy extends Command {
       const deployConfig: DeployConfig = {
         'ario-process': advancedOptions?.arioProcess || baseConfig['ario-process'],
         'arns-name': baseConfig['arns-name'],
+        'cache-max-entries': baseConfig['cache-max-entries'],
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
         'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
@@ -280,26 +282,65 @@ export default class Deploy extends Command {
           if (deployConfig['deploy-file']) {
             const filePath = expandPath(deployConfig['deploy-file'])
             spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
-            txOrManifestId = await uploadFile(turbo, filePath, { fundingMode })
-            if (!txOrManifestId) {
+
+            // Load cache for file uploads
+            let cache = loadCache()
+            const uploadResult = await uploadFile(turbo, filePath, { cache, fundingMode })
+
+            if (!uploadResult.transactionId) {
               spinner.fail('File upload failed: no transaction ID returned')
               this.error('File upload failed: no transaction ID returned')
             }
 
-            spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
+            txOrManifestId = uploadResult.transactionId
+
+            // Update cache if it was modified
+            if (uploadResult.updatedCache) {
+              cache = cleanupCache(uploadResult.updatedCache, deployConfig['cache-max-entries'])
+              saveCache(cache)
+            }
+
+            if (uploadResult.cacheHit) {
+              spinner.succeed(`File cache hit - reusing transaction ${chalk.green(txOrManifestId)}`)
+            } else {
+              spinner.succeed(
+                `File uploaded: ${chalk.green(txOrManifestId)} ${chalk.gray('(cached for future deployments)')}`,
+              )
+            }
           } else {
             const folderPath = expandPath(deployConfig['deploy-folder'])
             spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-            txOrManifestId = await uploadFolder(turbo, folderPath, {
+
+            // Load cache for folder uploads
+            let cache = loadCache()
+            const uploadResult = await uploadFolder(turbo, folderPath, {
+              cache,
               fundingMode,
               throwOnFailure: true,
             })
-            if (!txOrManifestId) {
+
+            if (!uploadResult.transactionId) {
               spinner.fail('Folder upload failed: no transaction ID returned')
               this.error('Folder upload failed: no transaction ID returned')
             }
 
-            spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
+            txOrManifestId = uploadResult.transactionId
+
+            // Update cache if it was modified
+            if (uploadResult.updatedCache) {
+              cache = cleanupCache(uploadResult.updatedCache, deployConfig['cache-max-entries'])
+              saveCache(cache)
+            }
+
+            if (uploadResult.cacheHit) {
+              spinner.succeed(
+                `Folder cache hit - reusing transaction ${chalk.green(txOrManifestId)}`,
+              )
+            } else {
+              spinner.succeed(
+                `Folder uploaded: ${chalk.green(txOrManifestId)} ${chalk.gray('(cached for future deployments)')}`,
+              )
+            }
           }
         } catch (uploadError) {
           spinner.fail('Upload failed')

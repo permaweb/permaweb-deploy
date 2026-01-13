@@ -14,6 +14,7 @@ import {
   validateTtl,
   validateUndername,
 } from '../utils/validators.js'
+import { DEFAULT_CACHE_MAX_ENTRIES } from './cache.js'
 
 /**
  * Global flag definitions - single source of truth for all flags
@@ -45,6 +46,14 @@ export const globalFlags = {
     }),
     prompt: promptArnsName,
     triggersInteractive: true,
+  }),
+  cacheMaxEntries: createFlagConfig<number>({
+    flag: Flags.integer({
+      default: DEFAULT_CACHE_MAX_ENTRIES,
+      description: 'Maximum number of entries to keep in the transaction cache (LRU)',
+      min: 1,
+      required: false,
+    }),
   }),
   deployFile: createFlagConfig<string | undefined>({
     flag: Flags.string({
@@ -173,6 +182,7 @@ export const globalFlags = {
 export const deployFlags = {
   'ario-process': globalFlags.arioProcess.flag,
   'arns-name': globalFlags.arnsName.flag,
+  'cache-max-entries': globalFlags.cacheMaxEntries.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
@@ -209,6 +219,7 @@ export const walletFlags = {
 export interface DeployConfig {
   'ario-process': string
   'arns-name': string
+  'cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
   'max-token-amount'?: string
@@ -227,6 +238,7 @@ export interface DeployConfig {
 export const deployFlagConfigs = {
   'ario-process': globalFlags.arioProcess,
   'arns-name': globalFlags.arnsName,
+  'cache-max-entries': globalFlags.cacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
   'max-token-amount': globalFlags.maxTokenAmount,

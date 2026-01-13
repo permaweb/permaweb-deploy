@@ -3,15 +3,48 @@ import { Readable } from 'node:stream'
 import { OnDemandFunding, type TurboAuthenticatedClient } from '@ardrive/turbo-sdk'
 import * as mime from 'mime-types'
 
+import {
+  getCachedTransaction,
+  hashFile,
+  hashFolder,
+  setCachedTransaction,
+  touchCacheEntry,
+  type TransactionCache,
+} from './cache.js'
+
+export interface UploadResult {
+  cacheHit: boolean
+  transactionId: string
+  updatedCache?: TransactionCache
+}
+
 export async function uploadFile(
   turbo: TurboAuthenticatedClient,
   filePath: string,
   options?: {
+    cache?: TransactionCache
     fundingMode?: OnDemandFunding
   },
-): Promise<string> {
+): Promise<UploadResult> {
   const mimeType = mime.lookup(filePath) || 'application/octet-stream'
 
+  // Compute hash if cache is provided
+  const fileHash = options?.cache ? await hashFile(filePath) : undefined
+
+  // Check cache for hit
+  if (fileHash && options?.cache) {
+    const cached = getCachedTransaction(options.cache, fileHash)
+    if (cached) {
+      const updatedCache = touchCacheEntry(options.cache, fileHash)
+      return {
+        cacheHit: true,
+        transactionId: cached.transactionId,
+        updatedCache,
+      }
+    }
+  }
+
+  // Upload file
   const uploadResult = await turbo.uploadFile({
     dataItemOpts: {
       tags: [
@@ -37,17 +70,47 @@ export async function uploadFile(
     throw new Error('Failed to upload file: upload result missing transaction ID')
   }
 
-  return uploadResult.id
+  // Store in cache if provided
+  if (fileHash && options?.cache) {
+    const updatedCache = setCachedTransaction(options.cache, fileHash, uploadResult.id)
+    return {
+      cacheHit: false,
+      transactionId: uploadResult.id,
+      updatedCache,
+    }
+  }
+
+  return {
+    cacheHit: false,
+    transactionId: uploadResult.id,
+  }
 }
 
 export async function uploadFolder(
   turbo: TurboAuthenticatedClient,
   folderPath: string,
   options?: {
+    cache?: TransactionCache
     fundingMode?: OnDemandFunding
     throwOnFailure?: boolean
   },
-): Promise<string> {
+): Promise<UploadResult> {
+  // Compute hash if cache is provided
+  const folderHash = options?.cache ? await hashFolder(folderPath) : undefined
+
+  // Check cache for hit
+  if (folderHash && options?.cache) {
+    const cached = getCachedTransaction(options.cache, folderHash)
+    if (cached) {
+      const updatedCache = touchCacheEntry(options.cache, folderHash)
+      return {
+        cacheHit: true,
+        transactionId: cached.transactionId,
+        updatedCache,
+      }
+    }
+  }
+
   const uploadResult = await turbo.uploadFolder({
     dataItemOpts: {
       tags: [
@@ -107,5 +170,18 @@ export async function uploadFolder(
     throw new Error('Failed to upload folder')
   }
 
-  return txOrManifestId
+  // Store in cache if provided
+  if (folderHash && options?.cache) {
+    const updatedCache = setCachedTransaction(options.cache, folderHash, txOrManifestId)
+    return {
+      cacheHit: false,
+      transactionId: txOrManifestId,
+      updatedCache,
+    }
+  }
+
+  return {
+    cacheHit: false,
+    transactionId: txOrManifestId,
+  }
 }

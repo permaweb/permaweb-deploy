@@ -42,3 +42,4 @@ oclif.manifest.json
 
 # Misc
 .husky/_
+.permaweb-deploy/

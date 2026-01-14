@@ -52,6 +52,13 @@ inputs:
   github-token:
     description: 'GitHub token for posting PR comments (required when preview is enabled)'
     required: false
+  use-cache:
+    description: 'Enable transaction caching to speed up subsequent deployments by reusing unchanged file uploads'
+    required: false
+    default: 'true'
+  cache-name:
+    description: 'Custom name for the cache artifact. Defaults to permaweb-deploy-cache-{arns-name}'
+    required: false
 
 outputs:
   tx-id:
@@ -76,6 +83,32 @@ runs:
       shell: bash
       run: npm install -g permaweb-deploy
 
+    - name: Determine cache key
+      id: cache-key
+      if: inputs.use-cache != 'false'
+      shell: bash
+      run: |
+        if [[ -n "${{ inputs.cache-name }}" ]]; then
+          CACHE_PREFIX="${{ inputs.cache-name }}"
+        else
+          # Sanitize arns-name for cache key
+          SANITIZED_ARNS=$(echo "${{ inputs.arns-name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')
+          CACHE_PREFIX="permaweb-deploy-cache-${SANITIZED_ARNS}"
+        fi
+        echo "prefix=$CACHE_PREFIX" >> $GITHUB_OUTPUT
+        # Include run ID to ensure we can always save a new cache entry
+        echo "key=${CACHE_PREFIX}-${{ github.run_id }}" >> $GITHUB_OUTPUT
+
+    - name: Restore transaction cache
+      id: cache-restore
+      if: inputs.use-cache != 'false'
+      uses: actions/cache/restore@v4
+      with:
+        path: .permaweb-deploy/transaction-cache.json
+        key: ${{ steps.cache-key.outputs.key }}
+        restore-keys: |
+          ${{ steps.cache-key.outputs.prefix }}-
+
     - name: Determine undername
       id: undername
       shell: bash
@@ -92,7 +125,7 @@ runs:
         if [[ "$AUTO_UNDERNAME" == "true" && "$UNDERNAME" == "@" ]]; then
           # Get sanitized repository name
           REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
-          
+
           # Check if this is a pull request
           if [[ -n "${{ github.event.pull_request.number }}" ]]; then
             UNDERNAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}"
@@ -103,14 +136,14 @@ runs:
             UNDERNAME="${REPO_NAME}-${BRANCH_NAME}"
             echo "Auto-generated undername from branch: $UNDERNAME"
           fi
-          
+
           # Ensure length constraints: < 61 chars and != 43 chars
           if [[ ${#UNDERNAME} -ge 61 ]]; then
             # Truncate to 60 characters
             UNDERNAME="${UNDERNAME:0:60}"
             echo "Truncated undername to 60 characters: $UNDERNAME"
           fi
-          
+
           # Avoid exactly 43 characters (Arweave transaction ID length)
           if [[ ${#UNDERNAME} -eq 43 ]]; then
             # Append 'x' to make it 44 characters
@@ -191,6 +224,14 @@ runs:
 
         echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "Deployment URL: $DEPLOYMENT_URL"
+
+    - name: Save transaction cache
+      if: inputs.use-cache != 'false' && always()
+      uses: actions/cache/save@v4
+      continue-on-error: true
+      with:
+        path: .permaweb-deploy/transaction-cache.json
+        key: ${{ steps.cache-key.outputs.key }}
 
     - name: Comment on PR
       if: inputs.preview == 'true' && github.event_name == 'pull_request'

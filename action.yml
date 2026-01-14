@@ -56,9 +56,6 @@ inputs:
     description: 'Enable transaction caching to speed up subsequent deployments by reusing unchanged file uploads'
     required: false
     default: 'true'
-  cache-name:
-    description: 'Custom name for the cache artifact. Defaults to permaweb-deploy-cache-{arns-name}'
-    required: false
 
 outputs:
   tx-id:
@@ -83,31 +80,13 @@ runs:
       shell: bash
       run: npm install -g permaweb-deploy
 
-    - name: Determine cache key
-      id: cache-key
-      if: inputs.use-cache != 'false'
-      shell: bash
-      run: |
-        if [[ -n "${{ inputs.cache-name }}" ]]; then
-          CACHE_PREFIX="${{ inputs.cache-name }}"
-        else
-          # Sanitize arns-name for cache key
-          SANITIZED_ARNS=$(echo "${{ inputs.arns-name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')
-          CACHE_PREFIX="permaweb-deploy-cache-${SANITIZED_ARNS}"
-        fi
-        echo "prefix=$CACHE_PREFIX" >> $GITHUB_OUTPUT
-        # Include run ID to ensure we can always save a new cache entry
-        echo "key=${CACHE_PREFIX}-${{ github.run_id }}" >> $GITHUB_OUTPUT
-
     - name: Restore transaction cache
       id: cache-restore
       if: inputs.use-cache != 'false'
       uses: actions/cache/restore@v4
       with:
         path: .permaweb-deploy/transaction-cache.json
-        key: ${{ steps.cache-key.outputs.key }}
-        restore-keys: |
-          ${{ steps.cache-key.outputs.prefix }}-
+        key: permaweb-deploy-transaction-cache
 
     - name: Determine undername
       id: undername
@@ -225,13 +204,23 @@ runs:
         echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "Deployment URL: $DEPLOYMENT_URL"
 
+    - name: Delete old transaction cache
+      if: inputs.use-cache != 'false' && always()
+      shell: bash
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        # Delete previous cache so we can save an updated one
+        gh cache delete permaweb-deploy-transaction-cache 2>/dev/null || true
+
     - name: Save transaction cache
       if: inputs.use-cache != 'false' && always()
       uses: actions/cache/save@v4
       continue-on-error: true
       with:
         path: .permaweb-deploy/transaction-cache.json
-        key: ${{ steps.cache-key.outputs.key }}
+        key: permaweb-deploy-transaction-cache
 
     - name: Comment on PR
       if: inputs.preview == 'true' && github.event_name == 'pull_request'

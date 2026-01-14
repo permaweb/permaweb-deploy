@@ -204,23 +204,27 @@ runs:
         echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "Deployment URL: $DEPLOYMENT_URL"
 
-    - name: Delete old transaction cache
+    - name: Prepare and save transaction cache
       if: inputs.use-cache != 'false' && always()
       shell: bash
       continue-on-error: true
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        # Delete previous cache so we can save an updated one
-        gh cache delete permaweb-deploy-transaction-cache 2>/dev/null || true
+        # Check if cache file was created by the CLI
+        if [[ -f .permaweb-deploy/transaction-cache.json ]]; then
+          echo "Cache file exists, saving to GitHub cache"
 
-    - name: Save transaction cache
-      if: inputs.use-cache != 'false' && always()
-      uses: actions/cache/save@v4
-      continue-on-error: true
-      with:
-        path: .permaweb-deploy/transaction-cache.json
-        key: permaweb-deploy-transaction-cache
+          # Delete previous cache so we can save an updated one
+          gh cache delete permaweb-deploy-transaction-cache 2>/dev/null || true
+
+          # Save using gh cache (since actions/cache/save doesn't support overwrite)
+          gh cache save .permaweb-deploy/transaction-cache.json --key permaweb-deploy-transaction-cache
+        else
+          echo "No cache file found at .permaweb-deploy/transaction-cache.json"
+          echo "Listing directory contents for debugging:"
+          ls -la .permaweb-deploy/ 2>/dev/null || echo "Directory .permaweb-deploy/ does not exist"
+        fi
 
     - name: Comment on PR
       if: inputs.preview == 'true' && github.event_name == 'pull_request'

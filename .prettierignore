@@ -1,7 +1,7 @@
 node_modules
 dist
 coverage
-.changesets
+.changeset
 *.log
 package-lock.json
 pnpm-lock.yaml

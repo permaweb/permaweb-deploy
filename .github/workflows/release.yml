@@ -71,13 +71,6 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Enter prerelease mode (alpha)
-        if: github.ref == 'refs/heads/alpha'
-        run: |
-          if [ ! -f ".changeset/pre.json" ]; then
-            pnpm changeset pre enter alpha
-          fi
-
       - name: Create Release Pull Request or Publish (alpha)
         if: github.ref == 'refs/heads/alpha'
         uses: changesets/action@v1

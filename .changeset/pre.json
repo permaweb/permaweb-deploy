@@ -4,5 +4,7 @@
   "initialVersions": {
     "permaweb-deploy": "3.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "fix-alpha-release"
+  ]
 }

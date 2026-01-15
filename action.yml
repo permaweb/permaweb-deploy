@@ -78,7 +78,7 @@ runs:
 
     - name: Install permaweb-deploy
       shell: bash
-      run: npm install -g permaweb-deploy@alpha
+      run: npm install -g permaweb-deploy
 
     - name: Restore transaction cache
       id: cache-restore

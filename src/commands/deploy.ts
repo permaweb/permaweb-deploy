@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
 import {
@@ -18,10 +19,24 @@ import { type DeployConfig, deployFlagConfigs } from '../constants/flags.js'
 import { promptAdvancedOptions } from '../prompts/arns.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
+import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
 import { uploadFile, uploadFolder } from '../utils/uploader.js'
+
+function getFolderSize(folderPath: string): number {
+  let totalSize = 0
+
+  for (const item of fs.readdirSync(folderPath)) {
+    const fullPath = path.join(folderPath, item)
+    const stats = fs.statSync(fullPath)
+
+    totalSize += stats.isDirectory() ? getFolderSize(fullPath) : stats.size
+  }
+
+  return totalSize
+}
 
 export default class Deploy extends Command {
   static override args = {}
@@ -91,6 +106,7 @@ export default class Deploy extends Command {
       const deployConfig: DeployConfig = {
         'ario-process': advancedOptions?.arioProcess || baseConfig['ario-process'],
         'arns-name': baseConfig['arns-name'],
+        'cache-max-entries': baseConfig['cache-max-entries'],
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
         'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
@@ -211,18 +227,126 @@ export default class Deploy extends Command {
           })
         }
 
+        if (!fundingMode) {
+          spinner.start('Checking Turbo credits for upload')
+
+          try {
+            // Figure out how many bytes we're about to upload
+            const uploadBytes = deployConfig['deploy-file']
+              ? (() => {
+                  const filePath = expandPath(deployConfig['deploy-file']!)
+                  return fs.statSync(filePath).size
+                })()
+              : (() => {
+                  const folderPath = expandPath(deployConfig['deploy-folder']!)
+                  return getFolderSize(folderPath)
+                })()
+
+            const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
+
+            if (uploadBytes >= FREE_THRESHOLD_BYTES) {
+              // Ask Turbo how many winc this upload will cost, and compare to current balance
+              const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
+              const balance = await turbo.getBalance()
+
+              // These come back as strings; treat them as big integers
+              const requiredWinc = BigInt(uploadCost.winc)
+              const currentWinc = BigInt(balance.winc)
+
+              if (requiredWinc > currentWinc) {
+                spinner.fail('Insufficient Turbo credits')
+
+                this.error(
+                  [
+                    'Insufficient Turbo credits for this upload.',
+                    `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
+                    '',
+                    'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
+                  ].join(' '),
+                )
+              }
+            }
+
+            spinner.succeed('Turbo credits check passed')
+          } catch (balanceError) {
+            spinner.fail('Failed to check Turbo credits')
+            const errorMessage =
+              balanceError instanceof Error ? balanceError.message : String(balanceError)
+            this.error(`Failed to check Turbo credits: ${errorMessage}`)
+          }
+        }
+
         // Upload file or folder
         let txOrManifestId: string
-        if (deployConfig['deploy-file']) {
-          const filePath = expandPath(deployConfig['deploy-file'])
-          spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
-          txOrManifestId = await uploadFile(turbo, filePath, { fundingMode })
-          spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)}`)
-        } else {
-          const folderPath = expandPath(deployConfig['deploy-folder'])
-          spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-          txOrManifestId = await uploadFolder(turbo, folderPath, { fundingMode })
-          spinner.succeed(`Folder uploaded: ${chalk.green(txOrManifestId)}`)
+        try {
+          if (deployConfig['deploy-file']) {
+            const filePath = expandPath(deployConfig['deploy-file'])
+            spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
+
+            // Load cache for file uploads
+            let cache = loadCache()
+            const uploadResult = await uploadFile(turbo, filePath, { cache, fundingMode })
+
+            if (!uploadResult.transactionId) {
+              spinner.fail('File upload failed: no transaction ID returned')
+              this.error('File upload failed: no transaction ID returned')
+            }
+
+            txOrManifestId = uploadResult.transactionId
+
+            // Update cache if it was modified
+            if (uploadResult.updatedCache) {
+              cache = cleanupCache(uploadResult.updatedCache, deployConfig['cache-max-entries'])
+              saveCache(cache)
+            }
+
+            if (uploadResult.cacheHit) {
+              spinner.succeed(`File cache hit - reusing transaction ${chalk.green(txOrManifestId)}`)
+            } else {
+              spinner.succeed(
+                `File uploaded: ${chalk.green(txOrManifestId)} ${chalk.gray('(cached for future deployments)')}`,
+              )
+            }
+          } else {
+            const folderPath = expandPath(deployConfig['deploy-folder'])
+            spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
+
+            // Load cache for folder uploads
+            let cache = loadCache()
+            const uploadResult = await uploadFolder(turbo, folderPath, {
+              cache,
+              fundingMode,
+              throwOnFailure: true,
+            })
+
+            if (!uploadResult.transactionId) {
+              spinner.fail('Folder upload failed: no transaction ID returned')
+              this.error('Folder upload failed: no transaction ID returned')
+            }
+
+            txOrManifestId = uploadResult.transactionId
+
+            // Update cache if it was modified
+            if (uploadResult.updatedCache) {
+              cache = cleanupCache(uploadResult.updatedCache, deployConfig['cache-max-entries'])
+              saveCache(cache)
+            }
+
+            if (uploadResult.cacheHit) {
+              spinner.succeed(
+                `Folder cache hit - reusing transaction ${chalk.green(txOrManifestId)}`,
+              )
+            } else {
+              spinner.succeed(
+                `Folder uploaded: ${chalk.green(txOrManifestId)} ${chalk.gray('(cached for future deployments)')}`,
+              )
+            }
+          }
+        } catch (uploadError) {
+          spinner.fail('Upload failed')
+          const errorMessage =
+            uploadError instanceof Error ? uploadError.message : String(uploadError)
+          this.error(`Upload failed: ${errorMessage}`)
         }
 
         this.log('')

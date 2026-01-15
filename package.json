@@ -48,8 +48,8 @@
     "oclif.manifest.json"
   ],
   "dependencies": {
-    "@ar.io/sdk": "^3.10.1",
-    "@ardrive/turbo-sdk": "^1.32.0",
+    "@ar.io/sdk": "^3.22.1",
+    "@ardrive/turbo-sdk": "^1.39.1",
     "@inquirer/prompts": "^7.2.0",
     "@oclif/core": "^4.0.30",
     "@permaweb/aoconnect": "^0.0.85",

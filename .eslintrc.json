@@ -28,6 +28,7 @@
     "perfectionist/sort-union-types": "off",
     "import/order": "off",
     "jsdoc/require-returns": "off",
-    "new-cap": "off"
+    "new-cap": "off",
+    "max-depth": "off"
   }
 }

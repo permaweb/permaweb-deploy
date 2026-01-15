@@ -72,7 +72,7 @@ jobs:
         run: |
           if [ "${{ github.event.pull_request.base.ref }}" = "alpha" ]; then
             pnpm run version:alpha
-            pnpm run release:alpha
+            pnpm run release:alpha-snapshot
           else
             pnpm run version:snapshot
             pnpm run release:snapshot

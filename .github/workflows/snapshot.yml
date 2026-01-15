@@ -70,6 +70,11 @@ jobs:
 
       - name: Create snapshot release
         run: |
+          # Exit pre mode if present (for snapshot releases)
+          if [ -f ".changeset/pre.json" ]; then
+            pnpm changeset pre exit
+          fi
+
           if [ "${{ github.event.pull_request.base.ref }}" = "alpha" ]; then
             pnpm run version:alpha
             pnpm run release:alpha-snapshot

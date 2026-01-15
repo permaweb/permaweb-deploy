@@ -1,5 +1,11 @@
 # permaweb-deploy
 
+## 3.0.1-alpha.0
+
+### Patch Changes
+
+- f2dee44: Fix alpha release pipeline to properly create alpha-versioned releases
+
 ## 3.0.0
 
 ### Major Changes

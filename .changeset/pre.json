@@ -1,0 +1,10 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "permaweb-deploy": "3.0.0"
+  },
+  "changesets": [
+    "fix-alpha-release"
+  ]
+}

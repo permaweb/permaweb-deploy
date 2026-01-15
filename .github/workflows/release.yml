@@ -59,20 +59,11 @@ jobs:
           echo "registry=https://registry.npmjs.org/" >> .npmrc
           echo "always-auth=true" >> .npmrc
 
-      - name: Exit prerelease mode (main)
-        if: github.ref == 'refs/heads/main'
-        run: |
-          if [ -f ".changeset/pre.json" ]; then
-            pnpm changeset pre exit
-            git add -A .changeset/
-            git commit -m "chore: exit prerelease mode for stable release" || true
-            git push origin main
-          fi
-
       - name: Create Release Pull Request or Publish (main)
         if: github.ref == 'refs/heads/main'
         uses: changesets/action@v1
         with:
+          version: pnpm version:stable
           publish: pnpm release
           title: 'chore: release stable version'
           commit: 'chore: release stable version'

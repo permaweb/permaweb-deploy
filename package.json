@@ -24,12 +24,10 @@
     "prepare": "husky install",
     "changeset": "changeset",
     "version": "changeset version",
-    "version:stable": "node -e \"const fs = require('fs'); if(fs.existsSync('.changeset/pre.json')) { require('child_process').execSync('pnpm changeset pre exit', {stdio:'inherit'}); }\" && changeset version",
     "version:alpha": "changeset version --snapshot alpha",
     "version:snapshot": "changeset version --snapshot rc",
     "release": "changeset publish --tag latest",
-    "release:alpha": "changeset publish",
-    "release:alpha-snapshot": "changeset publish --tag alpha",
+    "release:alpha": "changeset publish --tag alpha",
     "release:snapshot": "changeset publish --tag rc --no-git-tag"
   },
   "oclif": {

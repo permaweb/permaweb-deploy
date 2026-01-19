@@ -103,13 +103,19 @@ export default class Deploy extends Command {
       }
 
       // Build final config with shared prompt results
+      // When --no-dedupe is set, use 0 for max entries to disable caching
+      const effectiveCacheMaxEntries = baseConfig['no-dedupe']
+        ? 0
+        : baseConfig['dedupe-cache-max-entries']
+
       const deployConfig: DeployConfig = {
         'ario-process': advancedOptions?.arioProcess || baseConfig['ario-process'],
         'arns-name': baseConfig['arns-name'],
-        'cache-max-entries': baseConfig['cache-max-entries'],
+        'dedupe-cache-max-entries': effectiveCacheMaxEntries,
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
         'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
+        'no-dedupe': baseConfig['no-dedupe'],
         'on-demand': advancedOptions?.onDemand || baseConfig['on-demand'],
         'private-key': walletConfig.privateKey,
         'sig-type': baseConfig['sig-type'],
@@ -283,8 +289,8 @@ export default class Deploy extends Command {
             const filePath = expandPath(deployConfig['deploy-file'])
             spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
 
-            // Load cache for file uploads
-            let cache = loadCache()
+            // Load cache for file uploads (skip if dedupe is disabled)
+            let cache = deployConfig['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
             const uploadResult = await uploadFile(turbo, filePath, { cache, fundingMode })
 
             if (!uploadResult.transactionId) {
@@ -294,25 +300,30 @@ export default class Deploy extends Command {
 
             txOrManifestId = uploadResult.transactionId
 
-            // Update cache if it was modified
-            if (uploadResult.updatedCache) {
-              cache = cleanupCache(uploadResult.updatedCache, deployConfig['cache-max-entries'])
+            // Update cache if it was modified and dedupe is enabled
+            if (uploadResult.updatedCache && deployConfig['dedupe-cache-max-entries'] > 0) {
+              cache = cleanupCache(
+                uploadResult.updatedCache,
+                deployConfig['dedupe-cache-max-entries'],
+              )
               saveCache(cache)
             }
 
             if (uploadResult.cacheHit) {
               spinner.succeed(`File cache hit - reusing transaction ${chalk.green(txOrManifestId)}`)
             } else {
-              spinner.succeed(
-                `File uploaded: ${chalk.green(txOrManifestId)} ${chalk.gray('(cached for future deployments)')}`,
-              )
+              const cacheMsg =
+                deployConfig['dedupe-cache-max-entries'] > 0
+                  ? chalk.gray('(cached for future deployments)')
+                  : ''
+              spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)} ${cacheMsg}`.trim())
             }
           } else {
             const folderPath = expandPath(deployConfig['deploy-folder'])
             spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
 
-            // Load cache for folder uploads
-            let cache = loadCache()
+            // Load cache for folder uploads (skip if dedupe is disabled)
+            let cache = deployConfig['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
             const uploadResult = await uploadFolder(turbo, folderPath, {
               cache,
               fundingMode,
@@ -326,9 +337,12 @@ export default class Deploy extends Command {
 
             txOrManifestId = uploadResult.transactionId
 
-            // Update cache if it was modified
-            if (uploadResult.updatedCache) {
-              cache = cleanupCache(uploadResult.updatedCache, deployConfig['cache-max-entries'])
+            // Update cache if it was modified and dedupe is enabled
+            if (uploadResult.updatedCache && deployConfig['dedupe-cache-max-entries'] > 0) {
+              cache = cleanupCache(
+                uploadResult.updatedCache,
+                deployConfig['dedupe-cache-max-entries'],
+              )
               saveCache(cache)
             }
 
@@ -337,9 +351,12 @@ export default class Deploy extends Command {
                 `Folder cache hit - reusing transaction ${chalk.green(txOrManifestId)}`,
               )
             } else {
-              spinner.succeed(
-                `Folder uploaded: ${chalk.green(txOrManifestId)} ${chalk.gray('(cached for future deployments)')}`,
-              )
+              const cacheMsg =
+                deployConfig['dedupe-cache-max-entries'] > 0
+                  ? chalk.gray('(cached for future deployments)')
+                  : ''
+              const msg = `Folder uploaded: ${chalk.green(txOrManifestId)} ${cacheMsg}`.trim()
+              spinner.succeed(msg)
             }
           }
         } catch (uploadError) {

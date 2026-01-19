@@ -52,10 +52,13 @@ inputs:
   github-token:
     description: 'GitHub token for posting PR comments (required when preview is enabled)'
     required: false
-  use-cache:
-    description: 'Enable transaction caching to speed up subsequent deployments by reusing unchanged file uploads'
+  no-dedupe:
+    description: 'Disable deduplication (do not cache or reuse previous uploads). By default, permaweb-deploy caches your deployment log to prevent uploading duplicate (unchanged) files.'
     required: false
-    default: 'true'
+    default: 'false'
+  dedupe-cache-max-entries:
+    description: 'Maximum number of entries to keep in the dedupe cache (LRU). Default is 10000.'
+    required: false
 
 outputs:
   tx-id:
@@ -82,7 +85,7 @@ runs:
 
     - name: Restore transaction cache
       id: cache-restore
-      if: inputs.use-cache != 'false'
+      if: inputs.no-dedupe != 'true'
       uses: actions/cache/restore@v4
       with:
         path: .permaweb-deploy/transaction-cache.json
@@ -171,6 +174,13 @@ runs:
           fi
         fi
 
+        # Add dedupe options
+        if [[ "${{ inputs.no-dedupe }}" == "true" ]]; then
+          ARGS="$ARGS --no-dedupe"
+        elif [[ -n "${{ inputs.dedupe-cache-max-entries }}" ]]; then
+          ARGS="$ARGS --dedupe-cache-max-entries ${{ inputs.dedupe-cache-max-entries }}"
+        fi
+
         echo "Running: permaweb-deploy deploy $ARGS"
 
         # Run deploy and capture output
@@ -205,7 +215,7 @@ runs:
         echo "Deployment URL: $DEPLOYMENT_URL"
 
     - name: Delete old transaction cache
-      if: inputs.use-cache != 'false' && always()
+      if: inputs.no-dedupe != 'true' && always()
       shell: bash
       continue-on-error: true
       env:
@@ -215,7 +225,7 @@ runs:
         gh cache delete permaweb-deploy-transaction-cache 2>/dev/null || true
 
     - name: Save transaction cache
-      if: inputs.use-cache != 'false' && always()
+      if: inputs.no-dedupe != 'true' && always()
       uses: actions/cache/save@v4
       continue-on-error: true
       with:

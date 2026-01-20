@@ -14,10 +14,13 @@ jobs:
   snapshot:
     name: Snapshot Release
     runs-on: ubuntu-latest
-    # Skip snapshot releases for alpha <-> main PRs (promotion/backport)
+    # Skip snapshot releases for:
+    # - alpha <-> main PRs (promotion/backport)
+    # - changeset release PRs (these are handled by the release workflow)
     if: |
       !((github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'alpha') ||
-        (github.event.pull_request.base.ref == 'alpha' && github.event.pull_request.head.ref == 'main'))
+        (github.event.pull_request.base.ref == 'alpha' && github.event.pull_request.head.ref == 'main') ||
+        startsWith(github.event.pull_request.head.ref, 'changeset-release/'))
 
     steps:
       - name: Checkout
@@ -29,8 +32,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

@@ -65,7 +65,7 @@ describe(
       expect(result.error?.message).toMatch(/valid Arweave transaction ID/)
     })
 
-    it('should reject invalid cache-max-entries', async () => {
+    it('should reject invalid dedupe-cache-max-entries', async () => {
       const result = await runCommand([
         'deploy',
         '--deploy-folder',
@@ -76,15 +76,15 @@ describe(
         'test-app',
         '--undername',
         '@',
-        '--cache-max-entries',
-        '0',
+        '--dedupe-cache-max-entries',
+        '-1',
       ])
 
       expect(result.error).toBeDefined()
-      expect(result.error?.message).toMatch(/Expected an integer greater than or equal to 1/)
+      expect(result.error?.message).toMatch(/Expected an integer greater than or equal to 0/)
     })
 
-    it('should accept valid cache-max-entries', async () => {
+    it('should accept valid dedupe-cache-max-entries', async () => {
       const result = await runCommand([
         'deploy',
         '--deploy-folder',
@@ -95,8 +95,43 @@ describe(
         'test-app',
         '--undername',
         '@',
-        '--cache-max-entries',
+        '--dedupe-cache-max-entries',
         '50',
+      ])
+
+      expect(result.error).toBeUndefined()
+    })
+
+    it('should accept --no-dedupe flag', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-folder',
+        './tests/fixtures/test-app',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--arns-name',
+        'test-app',
+        '--undername',
+        '@',
+        '--no-dedupe',
+      ])
+
+      expect(result.error).toBeUndefined()
+    })
+
+    it('should accept --dedupe-cache-max-entries 0 to disable caching', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-folder',
+        './tests/fixtures/test-app',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--arns-name',
+        'test-app',
+        '--undername',
+        '@',
+        '--dedupe-cache-max-entries',
+        '0',
       ])
 
       expect(result.error).toBeUndefined()
@@ -328,7 +363,7 @@ describe(
           'test-app',
           '--undername',
           '@',
-          '--cache-max-entries',
+          '--dedupe-cache-max-entries',
           '10',
         ])
 
@@ -353,7 +388,7 @@ describe(
           'test-app',
           '--undername',
           '@',
-          '--cache-max-entries',
+          '--dedupe-cache-max-entries',
           '10',
         ])
 
@@ -379,7 +414,7 @@ describe(
           fs.rmSync(cacheDir, { force: true, recursive: true })
         }
 
-        // First deploy - should upload and cache
+        // First deploy - should upload and cache each file individually
         const result1 = await runCommand([
           'deploy',
           '--deploy-folder',
@@ -390,21 +425,22 @@ describe(
           'test-app',
           '--undername',
           '@',
-          '--cache-max-entries',
+          '--dedupe-cache-max-entries',
           '10',
         ])
 
         expect(result1.error).toBeUndefined()
 
-        // Check cache was created
+        // Check cache was created with per-file entries
         const cachePath = path.join(cacheDir, 'transaction-cache.json')
         expect(fs.existsSync(cachePath)).toBe(true)
 
         const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
         const entries = Object.keys(cache)
-        expect(entries.length).toBe(1)
+        // test-app folder has 2 files (index.html, style.css), so expect 2 cache entries
+        expect(entries.length).toBe(2)
 
-        // Second deploy - should use cache
+        // Second deploy - should use cache for all files
         const result2 = await runCommand([
           'deploy',
           '--deploy-folder',
@@ -415,15 +451,88 @@ describe(
           'test-app',
           '--undername',
           '@',
-          '--cache-max-entries',
+          '--dedupe-cache-max-entries',
           '10',
         ])
 
         expect(result2.error).toBeUndefined()
 
-        // Cache should still have same entry (not duplicated)
+        // Cache should still have same entries (not duplicated)
         const cache2 = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
-        expect(Object.keys(cache2).length).toBe(1)
+        expect(Object.keys(cache2).length).toBe(2)
+
+        // Clean up
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+      })
+
+      it('should not create cache when --no-dedupe is used', async () => {
+        const fs = await import('node:fs')
+        const path = await import('node:path')
+
+        // Clean up any existing cache
+        const cacheDir = path.join(process.cwd(), '.permaweb-deploy')
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+
+        // Deploy with --no-dedupe
+        const result = await runCommand([
+          'deploy',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--arns-name',
+          'test-app',
+          '--undername',
+          '@',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeUndefined()
+
+        // Check cache was NOT created
+        const cachePath = path.join(cacheDir, 'transaction-cache.json')
+        expect(fs.existsSync(cachePath)).toBe(false)
+
+        // Clean up
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+      })
+
+      it('should not create cache when --dedupe-cache-max-entries 0 is used', async () => {
+        const fs = await import('node:fs')
+        const path = await import('node:path')
+
+        // Clean up any existing cache
+        const cacheDir = path.join(process.cwd(), '.permaweb-deploy')
+        if (fs.existsSync(cacheDir)) {
+          fs.rmSync(cacheDir, { force: true, recursive: true })
+        }
+
+        // Deploy with --dedupe-cache-max-entries 0
+        const result = await runCommand([
+          'deploy',
+          '--deploy-folder',
+          './tests/fixtures/test-app',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--arns-name',
+          'test-app',
+          '--undername',
+          '@',
+          '--dedupe-cache-max-entries',
+          '0',
+        ])
+
+        expect(result.error).toBeUndefined()
+
+        // Check cache was NOT created
+        const cachePath = path.join(cacheDir, 'transaction-cache.json')
+        expect(fs.existsSync(cachePath)).toBe(false)
 
         // Clean up
         if (fs.existsSync(cacheDir)) {

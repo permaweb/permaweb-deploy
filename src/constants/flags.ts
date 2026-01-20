@@ -47,11 +47,11 @@ export const globalFlags = {
     prompt: promptArnsName,
     triggersInteractive: true,
   }),
-  cacheMaxEntries: createFlagConfig<number>({
+  dedupeCacheMaxEntries: createFlagConfig<number>({
     flag: Flags.integer({
       default: DEFAULT_CACHE_MAX_ENTRIES,
-      description: 'Maximum number of entries to keep in the transaction cache (LRU)',
-      min: 1,
+      description: 'Maximum number of entries to keep in the dedupe cache (LRU)',
+      min: 0,
       required: false,
     }),
   }),
@@ -98,6 +98,13 @@ export const globalFlags = {
   maxTokenAmount: createFlagConfig<string | undefined>({
     flag: Flags.string({
       description: 'Maximum token amount for on-demand payment',
+      required: false,
+    }),
+  }),
+  noDedupe: createFlagConfig<boolean>({
+    flag: Flags.boolean({
+      default: false,
+      description: 'Disable deduplication (do not cache or reuse previous uploads)',
       required: false,
     }),
   }),
@@ -182,10 +189,11 @@ export const globalFlags = {
 export const deployFlags = {
   'ario-process': globalFlags.arioProcess.flag,
   'arns-name': globalFlags.arnsName.flag,
-  'cache-max-entries': globalFlags.cacheMaxEntries.flag,
+  'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
+  'no-dedupe': globalFlags.noDedupe.flag,
   'on-demand': globalFlags.onDemand.flag,
   'private-key': globalFlags.privateKey.flag,
   'sig-type': globalFlags.sigType.flag,
@@ -219,10 +227,11 @@ export const walletFlags = {
 export interface DeployConfig {
   'ario-process': string
   'arns-name': string
-  'cache-max-entries': number
+  'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
   'max-token-amount'?: string
+  'no-dedupe': boolean
   'on-demand'?: string
   'private-key'?: string
   'sig-type': string
@@ -238,10 +247,11 @@ export interface DeployConfig {
 export const deployFlagConfigs = {
   'ario-process': globalFlags.arioProcess,
   'arns-name': globalFlags.arnsName,
-  'cache-max-entries': globalFlags.cacheMaxEntries,
+  'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
   'max-token-amount': globalFlags.maxTokenAmount,
+  'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
   'sig-type': globalFlags.sigType,

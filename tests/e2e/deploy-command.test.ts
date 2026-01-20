@@ -414,7 +414,7 @@ describe(
           fs.rmSync(cacheDir, { force: true, recursive: true })
         }
 
-        // First deploy - should upload and cache
+        // First deploy - should upload and cache each file individually
         const result1 = await runCommand([
           'deploy',
           '--deploy-folder',
@@ -431,15 +431,16 @@ describe(
 
         expect(result1.error).toBeUndefined()
 
-        // Check cache was created
+        // Check cache was created with per-file entries
         const cachePath = path.join(cacheDir, 'transaction-cache.json')
         expect(fs.existsSync(cachePath)).toBe(true)
 
         const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
         const entries = Object.keys(cache)
-        expect(entries.length).toBe(1)
+        // test-app folder has 2 files (index.html, style.css), so expect 2 cache entries
+        expect(entries.length).toBe(2)
 
-        // Second deploy - should use cache
+        // Second deploy - should use cache for all files
         const result2 = await runCommand([
           'deploy',
           '--deploy-folder',
@@ -456,9 +457,9 @@ describe(
 
         expect(result2.error).toBeUndefined()
 
-        // Cache should still have same entry (not duplicated)
+        // Cache should still have same entries (not duplicated)
         const cache2 = JSON.parse(fs.readFileSync(cachePath, 'utf8'))
-        expect(Object.keys(cache2).length).toBe(1)
+        expect(Object.keys(cache2).length).toBe(2)
 
         // Clean up
         if (fs.existsSync(cacheDir)) {

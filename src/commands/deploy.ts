@@ -23,7 +23,7 @@ import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
-import { uploadFile, uploadFolder } from '../utils/uploader.js'
+import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
 
 function getFolderSize(folderPath: string): number {
   let totalSize = 0
@@ -324,7 +324,7 @@ export default class Deploy extends Command {
 
             // Load cache for folder uploads (skip if dedupe is disabled)
             let cache = deployConfig['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-            const uploadResult = await uploadFolder(turbo, folderPath, {
+            const uploadResult: FolderUploadResult = await uploadFolder(turbo, folderPath, {
               cache,
               fundingMode,
               throwOnFailure: true,
@@ -346,17 +346,26 @@ export default class Deploy extends Command {
               saveCache(cache)
             }
 
+            // Build the success message with cache stats
+            const { cacheHits, totalFiles, uploaded } = uploadResult
+            const statsMsg =
+              cacheHits > 0
+                ? chalk.gray(` (${cacheHits}/${totalFiles} files cached, ${uploaded} uploaded)`)
+                : ''
+
             if (uploadResult.cacheHit) {
+              // All files were cache hits
               spinner.succeed(
-                `Folder cache hit - reusing transaction ${chalk.green(txOrManifestId)}`,
+                `All ${totalFiles} files cached - manifest: ${chalk.green(txOrManifestId)}`,
               )
             } else {
               const cacheMsg =
                 deployConfig['dedupe-cache-max-entries'] > 0
-                  ? chalk.gray('(cached for future deployments)')
+                  ? chalk.gray(' (files cached for future deployments)')
                   : ''
-              const msg = `Folder uploaded: ${chalk.green(txOrManifestId)} ${cacheMsg}`.trim()
-              spinner.succeed(msg)
+              spinner.succeed(
+                `Folder uploaded: ${chalk.green(txOrManifestId)}${statsMsg}${cacheMsg}`,
+              )
             }
           }
         } catch (uploadError) {

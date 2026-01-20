@@ -1,5 +1,11 @@
 # permaweb-deploy
 
+## 3.2.1
+
+### Patch Changes
+
+- 7bbdfd6: Fix snapshot workflow to skip changeset release PRs
+
 ## 3.2.0
 
 ### Minor Changes

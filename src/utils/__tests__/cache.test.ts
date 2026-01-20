@@ -252,5 +252,4 @@ describe('cache', () => {
       expect(files).toContain(path.join('a', 'b', 'c', 'deep.txt'))
     })
   })
-
 })

@@ -70,8 +70,9 @@ export async function hashFile(filePath: string): Promise<string> {
 
 /**
  * Recursively get all files in a directory
+ * Returns relative paths from the base directory
  */
-function getAllFiles(dirPath: string, basePath: string = dirPath): string[] {
+export function getAllFiles(dirPath: string, basePath: string = dirPath): string[] {
   const files: string[] = []
 
   for (const item of fs.readdirSync(dirPath)) {
@@ -87,24 +88,6 @@ function getAllFiles(dirPath: string, basePath: string = dirPath): string[] {
   }
 
   return files
-}
-
-/**
- * Compute a combined SHA-256 hash of all files in a folder
- * Files are sorted by relative path for consistent ordering
- */
-export async function hashFolder(folderPath: string): Promise<string> {
-  const files = getAllFiles(folderPath).sort()
-  const combinedHash = crypto.createHash('sha256')
-
-  for (const relativePath of files) {
-    const fullPath = path.join(folderPath, relativePath)
-    const fileHash = await hashFile(fullPath)
-    // Include both the relative path and file hash for uniqueness
-    combinedHash.update(`${relativePath}:${fileHash}\n`)
-  }
-
-  return combinedHash.digest('hex')
 }
 
 /**

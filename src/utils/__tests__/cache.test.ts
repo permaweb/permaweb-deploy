@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   cleanupCache,
+  getAllFiles,
   getCachedTransaction,
   hashFile,
-  hashFolder,
   setCachedTransaction,
   touchCacheEntry,
   type TransactionCache,
@@ -204,77 +204,52 @@ describe('cache', () => {
     })
   })
 
-  describe('hashFolder', () => {
+  describe('getAllFiles', () => {
     let tempDir: string
 
     beforeEach(() => {
-      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cache-folder-test-'))
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cache-getallfiles-test-'))
     })
 
     afterEach(() => {
       fs.rmSync(tempDir, { force: true, recursive: true })
     })
 
-    it('should compute combined hash of all files in folder', async () => {
+    it('should return empty array for empty directory', () => {
+      const files = getAllFiles(tempDir)
+      expect(files).toEqual([])
+    })
+
+    it('should return relative paths for files', () => {
       fs.writeFileSync(path.join(tempDir, 'file1.txt'), 'content 1')
       fs.writeFileSync(path.join(tempDir, 'file2.txt'), 'content 2')
 
-      const hash = await hashFolder(tempDir)
-      expect(hash).toHaveLength(64) // SHA-256 hex is 64 chars
+      const files = getAllFiles(tempDir)
+      expect(files).toHaveLength(2)
+      expect(files).toContain('file1.txt')
+      expect(files).toContain('file2.txt')
     })
 
-    it('should produce different hashes for different folder contents', async () => {
-      fs.writeFileSync(path.join(tempDir, 'file1.txt'), 'content 1')
-      const hash1 = await hashFolder(tempDir)
-
-      fs.writeFileSync(path.join(tempDir, 'file1.txt'), 'content 2')
-      const hash2 = await hashFolder(tempDir)
-
-      expect(hash1).not.toBe(hash2)
-    })
-
-    it('should produce different hashes when files are added', async () => {
-      fs.writeFileSync(path.join(tempDir, 'file1.txt'), 'content 1')
-      const hash1 = await hashFolder(tempDir)
-
-      fs.writeFileSync(path.join(tempDir, 'file2.txt'), 'content 2')
-      const hash2 = await hashFolder(tempDir)
-
-      expect(hash1).not.toBe(hash2)
-    })
-
-    it('should produce consistent hash for same folder contents', async () => {
-      fs.writeFileSync(path.join(tempDir, 'file1.txt'), 'content 1')
-      fs.writeFileSync(path.join(tempDir, 'file2.txt'), 'content 2')
-
-      const hash1 = await hashFolder(tempDir)
-      const hash2 = await hashFolder(tempDir)
-
-      expect(hash1).toBe(hash2)
-    })
-
-    it('should handle nested directories', async () => {
+    it('should handle nested directories', () => {
       const subDir = path.join(tempDir, 'subdir')
       fs.mkdirSync(subDir)
-      fs.writeFileSync(path.join(tempDir, 'file1.txt'), 'content 1')
-      fs.writeFileSync(path.join(subDir, 'file2.txt'), 'content 2')
+      fs.writeFileSync(path.join(tempDir, 'root.txt'), 'root content')
+      fs.writeFileSync(path.join(subDir, 'nested.txt'), 'nested content')
 
-      const hash = await hashFolder(tempDir)
-      expect(hash).toHaveLength(64)
+      const files = getAllFiles(tempDir)
+      expect(files).toHaveLength(2)
+      expect(files).toContain('root.txt')
+      expect(files).toContain(path.join('subdir', 'nested.txt'))
     })
 
-    it('should include file paths in hash for uniqueness', async () => {
-      // Create folder with file "a.txt" containing "content"
-      fs.writeFileSync(path.join(tempDir, 'a.txt'), 'content')
-      const hash1 = await hashFolder(tempDir)
+    it('should handle deeply nested directories', () => {
+      const deepDir = path.join(tempDir, 'a', 'b', 'c')
+      fs.mkdirSync(deepDir, { recursive: true })
+      fs.writeFileSync(path.join(deepDir, 'deep.txt'), 'deep content')
 
-      // Clean and create folder with file "b.txt" containing same "content"
-      fs.rmSync(path.join(tempDir, 'a.txt'))
-      fs.writeFileSync(path.join(tempDir, 'b.txt'), 'content')
-      const hash2 = await hashFolder(tempDir)
-
-      // Hashes should differ because file names are different
-      expect(hash1).not.toBe(hash2)
+      const files = getAllFiles(tempDir)
+      expect(files).toHaveLength(1)
+      expect(files).toContain(path.join('a', 'b', 'c', 'deep.txt'))
     })
   })
 })

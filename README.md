@@ -190,6 +190,45 @@ permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x.
 - `--private-key, -k`: Private key or JWK JSON string (alternative to `--wallet`)
 - `--on-demand`: Enable on-demand payment with specified token. Choices: `ario`, `base-eth`
 - `--max-token-amount`: Maximum token amount for on-demand payment (used with `--on-demand`)
+- `--no-dedupe`: Disable deduplication (do not cache or reuse previous uploads)
+- `--dedupe-cache-max-entries`: Maximum number of entries to keep in the dedupe cache (LRU). Default: `10000`
+
+### Deduplication
+
+By default, permaweb-deploy caches your deployment log to prevent uploading duplicate (unchanged) files. This saves both time and upload costs by reusing existing data on Arweave.
+
+**How it works:**
+
+1. When you deploy, permaweb-deploy hashes each file in your build
+2. It checks the local cache for matching hashes from previous uploads
+3. Files that haven't changed are skipped - the existing transaction ID is reused
+4. Only new or modified files are uploaded to Arweave
+5. The cache is stored locally in `.permaweb-deploy/transaction-cache.json`
+
+**Disable deduplication:**
+
+If you need to force a fresh upload of all files (e.g., for debugging or to ensure a completely new deployment):
+
+```bash
+permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --no-dedupe
+```
+
+**Limit cache size:**
+
+The dedupe cache uses an LRU (Least Recently Used) eviction strategy. By default, it keeps up to 10,000 entries. You can adjust this limit:
+
+```bash
+# Keep only the last 1000 file entries
+permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --dedupe-cache-max-entries 1000
+```
+
+**Cache location:**
+
+The cache file is stored at `.permaweb-deploy/transaction-cache.json` in your project root. You can:
+
+- Add it to `.gitignore` if you don't want to share cache across team members
+- Commit it to share cached transaction IDs with your team (reduces duplicate uploads)
+- Delete it to start fresh: `rm -rf .permaweb-deploy/`
 
 ### Package.json Scripts
 
@@ -324,6 +363,32 @@ jobs:
     deploy-folder: ./dist
     on-demand: ario
     max-token-amount: '2.0'
+```
+
+### Disabling Deduplication
+
+By default, the action caches transaction IDs to avoid re-uploading unchanged files. To disable this:
+
+```yaml
+- name: Deploy without dedupe
+  uses: permaweb/permaweb-deploy@v1
+  with:
+    deploy-key: ${{ secrets.DEPLOY_KEY }}
+    arns-name: myapp
+    deploy-folder: ./dist
+    no-dedupe: 'true'
+```
+
+You can also limit the cache size:
+
+```yaml
+- name: Deploy with limited cache
+  uses: permaweb/permaweb-deploy@v1
+  with:
+    deploy-key: ${{ secrets.DEPLOY_KEY }}
+    arns-name: myapp
+    deploy-folder: ./dist
+    dedupe-cache-max-entries: '1000'
 ```
 
 ---

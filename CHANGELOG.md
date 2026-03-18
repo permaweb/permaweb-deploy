@@ -1,6 +1,22 @@
 # permaweb-deploy
 
-## 3.0.1-alpha.0
+## 3.2.1
+
+### Patch Changes
+
+- 7bbdfd6: Fix snapshot workflow to skip changeset release PRs
+
+## 3.2.0
+
+### Minor Changes
+
+- 6260860: Add per-file deduplication for folder uploads
+  - Folder uploads now cache and deduplicate at the file level instead of the entire folder
+  - Only changed files are re-uploaded on subsequent deployments
+  - Deployment output now shows cache hits, total files, and uploaded file counts
+  - Removed stale `hashFolder` function in favor of per-file hashing
+
+## 3.0.1
 
 ### Patch Changes
 

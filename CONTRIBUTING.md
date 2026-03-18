@@ -24,9 +24,14 @@ Thank you for your interest in contributing to Permaweb Deploy! This document pr
    ```
 
 4. **Run Tests**
+
    ```bash
    pnpm test
    ```
+
+5. **Git hooks** (via `pnpm install` → `husky install`)
+   - **pre-commit**: [lint-staged](https://github.com/lint-staged/lint-staged) runs via `pnpm exec lint-staged` — ESLint (with fix) and Prettier on staged `*.ts` / `*.tsx`, and Prettier on staged `*.json`, `*.md`, `*.yml` / `*.yaml`.
+   - **commit-msg**: [commitlint](https://commitlint.js.org/) enforces Conventional Commits (see [Commit Messages](#commit-messages) below).
 
 ## Development Workflow
 

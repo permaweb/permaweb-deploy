@@ -1,17 +1,11 @@
 import fs from 'node:fs'
-import path from 'node:path'
 
 import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
-import {
-  ARIOToTokenAmount,
-  ETHToTokenAmount,
-  OnDemandFunding,
-  TurboFactory,
-} from '@ardrive/turbo-sdk'
 import { Command } from '@oclif/core'
 import { connect } from '@permaweb/aoconnect'
 import boxen from 'boxen'
 import chalk from 'chalk'
+// eslint-disable-next-line import/no-named-as-default
 import Table from 'cli-table3'
 import ora from 'ora'
 
@@ -19,24 +13,10 @@ import { type DeployConfig, deployFlagConfigs } from '../constants/flags.js'
 import { promptAdvancedOptions } from '../prompts/arns.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
-import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
-import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
-
-function getFolderSize(folderPath: string): number {
-  let totalSize = 0
-
-  for (const item of fs.readdirSync(folderPath)) {
-    const fullPath = path.join(folderPath, item)
-    const stats = fs.statSync(fullPath)
-
-    totalSize += stats.isDirectory() ? getFolderSize(fullPath) : stats.size
-  }
-
-  return totalSize
-}
+import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 
 export default class Deploy extends Command {
   static override args = {}
@@ -52,6 +32,8 @@ export default class Deploy extends Command {
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --wallet ./private-key.txt',
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --private-key "0x..."',
     '<%= config.bin %> deploy --arns-name my-app --on-demand ario --max-token-amount 1000',
+    '<%= config.bin %> deploy --arns-name my-app --uploader https://up.arweave.net',
+    '<%= config.bin %> upload --wallet ./wallet.json  # Upload only (no ArNS update)',
   ]
 
   static override flags = extractFlags(deployFlagConfigs)
@@ -60,19 +42,16 @@ export default class Deploy extends Command {
     try {
       const { flags } = await this.parse(Deploy)
 
-      // Check if we need interactive mode (no arns-name provided)
       const interactive = !flags['arns-name']
 
       if (interactive) {
-        this.log(chalk.cyan.bold('\n🎯 Interactive Deployment Mode\n'))
+        this.log(chalk.cyan.bold('\nInteractive Deployment Mode\n'))
       }
 
-      // Resolve base configuration - prompts will run automatically in interactive mode
       const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
         interactive,
       })) as DeployConfig
 
-      // Handle wallet configuration (shared between wallet and privateKey)
       let walletConfig: { privateKey?: string; wallet?: string } = {
         privateKey: baseConfig['private-key'],
         wallet: baseConfig.wallet,
@@ -86,7 +65,6 @@ export default class Deploy extends Command {
         }
       }
 
-      // Handle advanced options (shared between ttlSeconds, undername, arioProcess, onDemand, maxTokenAmount)
       let advancedOptions:
         | {
             arioProcess: string
@@ -102,8 +80,6 @@ export default class Deploy extends Command {
         advancedOptions = options || undefined
       }
 
-      // Build final config with shared prompt results
-      // When --no-dedupe is set, use 0 for max entries to disable caching
       const effectiveCacheMaxEntries = baseConfig['no-dedupe']
         ? 0
         : baseConfig['dedupe-cache-max-entries']
@@ -121,6 +97,7 @@ export default class Deploy extends Command {
         'sig-type': baseConfig['sig-type'],
         'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
         undername: advancedOptions?.undername || baseConfig.undername,
+        uploader: baseConfig.uploader,
         wallet: walletConfig.wallet,
       }
 
@@ -128,7 +105,6 @@ export default class Deploy extends Command {
         this.log('')
       }
 
-      // Get deploy key from wallet file, private-key flag, or environment variable
       let deployKey: string
       if (deployConfig.wallet) {
         const walletPath = expandPath(deployConfig.wallet)
@@ -137,13 +113,11 @@ export default class Deploy extends Command {
         }
 
         const walletContent = fs.readFileSync(walletPath, 'utf8')
-        // For Arweave wallets (JWK), encode to base64. For others (private keys), use as-is
         deployKey =
           deployConfig['sig-type'] === 'arweave'
             ? Buffer.from(walletContent).toString('base64')
             : walletContent.trim()
       } else if (deployConfig['private-key']) {
-        // For Arweave wallets (JWK JSON), encode to base64. For others, use as-is
         deployKey =
           deployConfig['sig-type'] === 'arweave'
             ? Buffer.from(deployConfig['private-key']).toString('base64')
@@ -157,13 +131,13 @@ export default class Deploy extends Command {
         }
       }
 
-      // All validation is now handled in resolveDeployConfig
       const arioProcess = deployConfig['ario-process']
 
-      this.log(chalk.cyan.bold('\n🚀 Starting deployment...\n'))
+      this.log(chalk.cyan.bold('\nStarting deployment...\n'))
       try {
-        // Initialize ARIO
-        const spinner = ora('Initializing ARIO').start()
+        const spinner = ora()
+
+        spinner.start('Initializing ARIO')
 
         const ao = connect({
           CU_URL: 'https://cu.ardrive.io',
@@ -180,7 +154,6 @@ export default class Deploy extends Command {
 
         spinner.succeed('ARIO initialized')
 
-        // Get ArNS record
         spinner.start(`Fetching ArNS record for ${chalk.yellow(deployConfig['arns-name'])}`)
         const arnsNameRecord = await ario
           .getArNSRecord({ name: deployConfig['arns-name'] })
@@ -191,194 +164,14 @@ export default class Deploy extends Command {
 
         spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
 
-        // Create signer
-        spinner.start('Creating signer')
-        const { signer, token } = createSigner(deployConfig['sig-type'] as SignerType, deployKey)
-        spinner.succeed(`Signer created (${chalk.cyan(deployConfig['sig-type'])})`)
-
-        // Initialize Turbo
-        spinner.start('Initializing Turbo')
-        const turbo = TurboFactory.authenticated({
-          signer,
-          token,
+        const txOrManifestId = await runUploadWorkflow(deployKey, deployConfig, {
+          error: (msg) => this.error(msg),
         })
-        spinner.succeed('Turbo initialized')
-
-        // Create on-demand funding mode if specified
-        let fundingMode: OnDemandFunding | undefined
-        if (deployConfig['on-demand'] && deployConfig['max-token-amount']) {
-          const tokenType = deployConfig['on-demand']
-          const maxAmount = Number.parseFloat(deployConfig['max-token-amount'])
-
-          let maxTokenAmount: ReturnType<typeof ARIOToTokenAmount>
-          switch (tokenType) {
-            case 'ario': {
-              maxTokenAmount = ARIOToTokenAmount(maxAmount)
-              break
-            }
-
-            case 'base-eth': {
-              maxTokenAmount = ETHToTokenAmount(maxAmount)
-              break
-            }
-
-            default: {
-              throw new Error(`Unsupported on-demand token type: ${tokenType}`)
-            }
-          }
-
-          fundingMode = new OnDemandFunding({
-            maxTokenAmount,
-            topUpBufferMultiplier: 1.1,
-          })
-        }
-
-        if (!fundingMode) {
-          spinner.start('Checking Turbo credits for upload')
-
-          try {
-            // Figure out how many bytes we're about to upload
-            const uploadBytes = deployConfig['deploy-file']
-              ? (() => {
-                  const filePath = expandPath(deployConfig['deploy-file']!)
-                  return fs.statSync(filePath).size
-                })()
-              : (() => {
-                  const folderPath = expandPath(deployConfig['deploy-folder']!)
-                  return getFolderSize(folderPath)
-                })()
-
-            const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
-
-            if (uploadBytes >= FREE_THRESHOLD_BYTES) {
-              // Ask Turbo how many winc this upload will cost, and compare to current balance
-              const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
-              const balance = await turbo.getBalance()
-
-              // These come back as strings; treat them as big integers
-              const requiredWinc = BigInt(uploadCost.winc)
-              const currentWinc = BigInt(balance.winc)
-
-              if (requiredWinc > currentWinc) {
-                spinner.fail('Insufficient Turbo credits')
-
-                this.error(
-                  [
-                    'Insufficient Turbo credits for this upload.',
-                    `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
-                    '',
-                    'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
-                  ].join(' '),
-                )
-              }
-            }
-
-            spinner.succeed('Turbo credits check passed')
-          } catch (balanceError) {
-            spinner.fail('Failed to check Turbo credits')
-            const errorMessage =
-              balanceError instanceof Error ? balanceError.message : String(balanceError)
-            this.error(`Failed to check Turbo credits: ${errorMessage}`)
-          }
-        }
-
-        // Upload file or folder
-        let txOrManifestId: string
-        try {
-          if (deployConfig['deploy-file']) {
-            const filePath = expandPath(deployConfig['deploy-file'])
-            spinner.start(`Uploading file ${chalk.yellow(deployConfig['deploy-file'])}`)
-
-            // Load cache for file uploads (skip if dedupe is disabled)
-            let cache = deployConfig['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-            const uploadResult = await uploadFile(turbo, filePath, { cache, fundingMode })
-
-            if (!uploadResult.transactionId) {
-              spinner.fail('File upload failed: no transaction ID returned')
-              this.error('File upload failed: no transaction ID returned')
-            }
-
-            txOrManifestId = uploadResult.transactionId
-
-            // Update cache if it was modified and dedupe is enabled
-            if (uploadResult.updatedCache && deployConfig['dedupe-cache-max-entries'] > 0) {
-              cache = cleanupCache(
-                uploadResult.updatedCache,
-                deployConfig['dedupe-cache-max-entries'],
-              )
-              saveCache(cache)
-            }
-
-            if (uploadResult.cacheHit) {
-              spinner.succeed(`File cache hit - reusing transaction ${chalk.green(txOrManifestId)}`)
-            } else {
-              const cacheMsg =
-                deployConfig['dedupe-cache-max-entries'] > 0
-                  ? chalk.gray('(cached for future deployments)')
-                  : ''
-              spinner.succeed(`File uploaded: ${chalk.green(txOrManifestId)} ${cacheMsg}`.trim())
-            }
-          } else {
-            const folderPath = expandPath(deployConfig['deploy-folder'])
-            spinner.start(`Uploading folder ${chalk.yellow(deployConfig['deploy-folder'])}`)
-
-            // Load cache for folder uploads (skip if dedupe is disabled)
-            let cache = deployConfig['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-            const uploadResult: FolderUploadResult = await uploadFolder(turbo, folderPath, {
-              cache,
-              fundingMode,
-              throwOnFailure: true,
-            })
-
-            if (!uploadResult.transactionId) {
-              spinner.fail('Folder upload failed: no transaction ID returned')
-              this.error('Folder upload failed: no transaction ID returned')
-            }
-
-            txOrManifestId = uploadResult.transactionId
-
-            // Update cache if it was modified and dedupe is enabled
-            if (uploadResult.updatedCache && deployConfig['dedupe-cache-max-entries'] > 0) {
-              cache = cleanupCache(
-                uploadResult.updatedCache,
-                deployConfig['dedupe-cache-max-entries'],
-              )
-              saveCache(cache)
-            }
-
-            // Build the success message with cache stats
-            const { cacheHits, totalFiles, uploaded } = uploadResult
-            const statsMsg =
-              cacheHits > 0
-                ? chalk.gray(` (${cacheHits}/${totalFiles} files cached, ${uploaded} uploaded)`)
-                : ''
-
-            if (uploadResult.cacheHit) {
-              // All files were cache hits
-              spinner.succeed(
-                `All ${totalFiles} files cached - manifest: ${chalk.green(txOrManifestId)}`,
-              )
-            } else {
-              const cacheMsg =
-                deployConfig['dedupe-cache-max-entries'] > 0
-                  ? chalk.gray(' (files cached for future deployments)')
-                  : ''
-              spinner.succeed(
-                `Folder uploaded: ${chalk.green(txOrManifestId)}${statsMsg}${cacheMsg}`,
-              )
-            }
-          }
-        } catch (uploadError) {
-          spinner.fail('Upload failed')
-          const errorMessage =
-            uploadError instanceof Error ? uploadError.message : String(uploadError)
-          this.error(`Upload failed: ${errorMessage}`)
-        }
 
         this.log('')
 
-        // Initialize ANT and update record
         spinner.start('Updating ANT record')
+        const { signer } = createSigner(deployConfig['sig-type'] as SignerType, deployKey)
         const ant = ANT.init({ processId: arnsNameRecord.processId, signer })
 
         await ant.setRecord(
@@ -407,7 +200,6 @@ export default class Deploy extends Command {
 
         spinner.succeed('ANT record updated')
 
-        // Display deployment details in a table inside a success box
         const table = new Table({
           head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
           style: {
@@ -417,20 +209,24 @@ export default class Deploy extends Command {
 
         table.push(
           ['Tx ID', chalk.green(txOrManifestId)],
+          ...(deployConfig.uploader
+            ? ([['Bundler service', chalk.cyan(deployConfig.uploader)]] as [string, string][])
+            : []),
           ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
           ['Undername', chalk.yellow(deployConfig.undername)],
           ['ANT', chalk.cyan(arnsNameRecord.processId)],
           ['ARIO Process', chalk.gray(arioProcess)],
           ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
+          ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
         )
 
         const successMessage = boxen(
-          `${chalk.green.bold('✨ Deployment Successful!')}\n\n${table.toString()}`,
+          `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
           {
             borderColor: 'green',
             borderStyle: 'round',
             padding: 1,
-            title: chalk.bold('🚀 Permaweb Deploy'),
+            title: chalk.bold('Permaweb Deploy'),
             titleAlignment: 'center',
           },
         )
@@ -442,9 +238,8 @@ export default class Deploy extends Command {
         )
       }
     } catch (error) {
-      // Handle user cancellation (Ctrl+C)
       if (error instanceof Error && error.name === 'ExitPromptError') {
-        this.log(chalk.yellow('\n\n👋 Deployment cancelled'))
+        this.log(chalk.yellow('\n\nDeployment cancelled'))
         this.exit(0)
       }
 

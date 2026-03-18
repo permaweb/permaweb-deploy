@@ -1,6 +1,6 @@
 {
   "name": "permaweb-deploy",
-  "version": "3.2.1",
+  "version": "3.4.0",
   "description": "Permaweb App Deployment Package",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,6 +9,7 @@
     "permaweb-deploy": "./bin/run.js"
   },
   "scripts": {
+    "clean:install": "rm -rf node_modules pnpm-lock.yaml || true && pnpm store prune && pnpm install",
     "build": "vite build && tsc --emitDeclarationOnly",
     "dev": "./bin/dev.js",
     "test": "vitest",
@@ -39,6 +40,9 @@
     "topics": {
       "deploy": {
         "description": "Deploy to the permaweb"
+      },
+      "upload": {
+        "description": "Upload to Arweave without updating ArNS"
       }
     }
   },
@@ -80,6 +84,7 @@
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "msw": "^2.11.3",
     "openapi-typescript": "^7.9.1",
     "prettier": "^3.4.2",
@@ -106,5 +111,12 @@
   "bugs": {
     "url": "https://github.com/permaweb/permaweb-deploy/issues"
   },
-  "homepage": "https://github.com/permaweb/permaweb-deploy#readme"
+  "homepage": "https://github.com/permaweb/permaweb-deploy#readme",
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings=0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": "prettier --write"
+  }
 }

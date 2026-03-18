@@ -4,7 +4,7 @@ import { Flags } from '@oclif/core'
 import { promptArioProcess, promptArnsName } from '../prompts/arns.js'
 import { promptDeployTarget } from '../prompts/deployment.js'
 import { promptSignerType } from '../prompts/wallet.js'
-import { createFlagConfig } from '../utils/config-resolver.js'
+import { createFlagConfig, type ResolvedConfig } from '../utils/config-resolver.js'
 import { TTL_MAX, TTL_MIN } from '../utils/constants.js'
 import {
   resolveArioProcess,
@@ -165,6 +165,13 @@ export const globalFlags = {
       required: false,
     }),
   }),
+  uploader: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description:
+        'Base URL of the Turbo bundler service to use (omit for ArDrive production: https://upload.ardrive.io). Examples: https://up.arweave.net (Arweave), https://upload.ardrive.dev (dev). The host must implement the Turbo bundler protocol; path/query are not required on the URL.',
+      required: false,
+    }),
+  }),
   wallet: createFlagConfig<string | undefined>({
     flag: Flags.string({
       char: 'w',
@@ -199,6 +206,7 @@ export const deployFlags = {
   'sig-type': globalFlags.sigType.flag,
   'ttl-seconds': globalFlags.ttlSeconds.flag,
   undername: globalFlags.undername.flag,
+  uploader: globalFlags.uploader.flag,
   wallet: globalFlags.wallet.flag,
 }
 
@@ -237,6 +245,7 @@ export interface DeployConfig {
   'sig-type': string
   'ttl-seconds': string
   undername: string
+  uploader?: string
   wallet?: string
 }
 
@@ -257,5 +266,24 @@ export const deployFlagConfigs = {
   'sig-type': globalFlags.sigType,
   'ttl-seconds': globalFlags.ttlSeconds,
   undername: globalFlags.undername,
+  uploader: globalFlags.uploader,
   wallet: globalFlags.wallet,
 } as const
+
+/**
+ * Upload command — file/folder to Arweave via Turbo without updating ArNS
+ */
+export const uploadFlagConfigs = {
+  'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
+  'deploy-file': globalFlags.deployFile,
+  'deploy-folder': globalFlags.deployFolder,
+  'max-token-amount': globalFlags.maxTokenAmount,
+  'no-dedupe': globalFlags.noDedupe,
+  'on-demand': globalFlags.onDemand,
+  'private-key': globalFlags.privateKey,
+  'sig-type': globalFlags.sigType,
+  uploader: globalFlags.uploader,
+  wallet: globalFlags.wallet,
+} as const
+
+export type UploadConfig = ResolvedConfig<typeof uploadFlagConfigs>

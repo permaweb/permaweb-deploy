@@ -118,6 +118,16 @@ Deploy a single file:
 permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --deploy-file ./path/to/file.txt
 ```
 
+### Upload only (no ArNS)
+
+To upload a folder or file to Arweave **without** updating an ArNS name, use the `upload` command (same Turbo upload, dedupe cache, and payment options as deploy, minus ArNS flags):
+
+```bash
+permaweb-deploy upload --wallet ./wallet.json --deploy-folder ./dist
+permaweb-deploy upload --wallet ./wallet.json --deploy-file ./dist/index.html
+DEPLOY_KEY=$(base64 -i wallet.json) permaweb-deploy upload --deploy-folder ./dist
+```
+
 ### Advanced Usage
 
 Deploy to an undername (subdomain):
@@ -177,7 +187,34 @@ permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x.
 - **ARIO**: Works with Arweave signer
 - **Base-ETH**: Works with Ethereum signer (Base Network)
 
+### Bundler service
+
+Uploads go through a [Turbo](https://docs.ardrive.io/docs/turbo/) **bundler service** (HTTP API that bundles data for Arweave). By default, permaweb-deploy uses ArDrive’s production bundler (`https://upload.ardrive.io`). **`--uploader`** sets the **base URL** of the bundler service to use (scheme + host; typically no path).
+
+| When to use               | Example value                                                 |
+| ------------------------- | ------------------------------------------------------------- |
+| **Default** (omit flag)   | ArDrive production bundler — same as Turbo CLI defaults       |
+| **Arweave bundler**       | `https://up.arweave.net`                                      |
+| **Development / staging** | `https://upload.ardrive.dev`                                  |
+| **Custom or self-hosted** | Your own base URL if it implements the Turbo bundler protocol |
+
+**Examples:**
+
+```bash
+# Deploy using Arweave’s bundler service
+permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --uploader https://up.arweave.net
+
+permaweb-deploy upload --wallet ./wallet.json --deploy-folder ./dist --uploader https://up.arweave.net
+```
+
+**Notes:**
+
+- Billing and signer behavior still follow Turbo; if an alternate bundler has different rules, check that provider’s docs.
+- Use a **base URL only** (e.g. `https://up.arweave.net`), not a path to a specific file or route.
+
 ### Command Options
+
+**`deploy`** (ArNS update):
 
 - `--arns-name, -n` (required): The ArNS name to update
 - `--ario-process, -p`: ARIO process to use (`mainnet`, `testnet`, or a custom process ID). Default: `mainnet`
@@ -192,6 +229,9 @@ permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x.
 - `--max-token-amount`: Maximum token amount for on-demand payment (used with `--on-demand`)
 - `--no-dedupe`: Disable deduplication (do not cache or reuse previous uploads)
 - `--dedupe-cache-max-entries`: Maximum number of entries to keep in the dedupe cache (LRU). Default: `10000`
+- `--uploader`: Base URL of the Turbo **bundler service** to use (default: `https://upload.ardrive.io`). See [Bundler service](#bundler-service) above.
+
+**`upload`** (no ArNS): accepts `--deploy-folder`, `--deploy-file`, wallet/signer flags, `--uploader`, `--on-demand` / `--max-token-amount`, and dedupe flags only.
 
 ### Deduplication
 
@@ -504,7 +544,8 @@ pnpm format
 permaweb-deploy/
 ├── src/
 │   ├── commands/        # oclif commands
-│   │   └── deploy.ts
+│   │   ├── deploy.ts
+│   │   └── upload.ts
 │   ├── types/           # TypeScript type definitions
 │   │   └── index.ts
 │   ├── utils/           # Utility functions

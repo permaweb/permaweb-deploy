@@ -7,6 +7,8 @@ export default defineConfig({
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
         'commands/deploy': resolve(__dirname, 'src/commands/deploy.ts'),
+        'commands/upload': resolve(__dirname, 'src/commands/upload.ts'),
+        'workflows/upload-workflow': resolve(__dirname, 'src/workflows/upload-workflow.ts'),
         'constants/flags': resolve(__dirname, 'src/constants/flags.ts'),
         'prompts/arns': resolve(__dirname, 'src/prompts/arns.ts'),
         'prompts/deployment': resolve(__dirname, 'src/prompts/deployment.ts'),

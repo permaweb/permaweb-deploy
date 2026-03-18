@@ -191,11 +191,11 @@ permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x.
 
 Uploads go through a [Turbo](https://docs.ardrive.io/docs/turbo/) **bundler service** (HTTP API that bundles data for Arweave). By default, permaweb-deploy uses ArDrive’s production bundler (`https://upload.ardrive.io`). **`--uploader`** sets the **base URL** of the bundler service to use (scheme + host; typically no path).
 
-| When to use | Example value |
-|---------------|----------------|
-| **Default** (omit flag) | ArDrive production bundler — same as Turbo CLI defaults |
-| **Arweave bundler** | `https://up.arweave.net` |
-| **Development / staging** | `https://upload.ardrive.dev` |
+| When to use               | Example value                                                 |
+| ------------------------- | ------------------------------------------------------------- |
+| **Default** (omit flag)   | ArDrive production bundler — same as Turbo CLI defaults       |
+| **Arweave bundler**       | `https://up.arweave.net`                                      |
+| **Development / staging** | `https://upload.ardrive.dev`                                  |
 | **Custom or self-hosted** | Your own base URL if it implements the Turbo bundler protocol |
 
 **Examples:**

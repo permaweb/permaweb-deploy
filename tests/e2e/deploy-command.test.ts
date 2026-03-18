@@ -20,8 +20,13 @@ describe(
       server.close()
     })
 
-    it('should show help message', async () => {
+    it('should show deploy help message', async () => {
       const result = await runCommand(['deploy', '--help'])
+      expect(result.error).toBeUndefined()
+    })
+
+    it('should show upload help message', async () => {
+      const result = await runCommand(['upload', '--help'])
       expect(result.error).toBeUndefined()
     })
 

@@ -40,6 +40,9 @@
     "topics": {
       "deploy": {
         "description": "Deploy to the permaweb"
+      },
+      "upload": {
+        "description": "Upload to Arweave without updating ArNS"
       }
     }
   },

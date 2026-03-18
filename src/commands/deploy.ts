@@ -6,12 +6,14 @@ import {
   ARIOToTokenAmount,
   ETHToTokenAmount,
   OnDemandFunding,
+  TurboAuthenticatedConfiguration,
   TurboFactory,
 } from '@ardrive/turbo-sdk'
 import { Command } from '@oclif/core'
 import { connect } from '@permaweb/aoconnect'
 import boxen from 'boxen'
 import chalk from 'chalk'
+// eslint-disable-next-line import/no-named-as-default
 import Table from 'cli-table3'
 import ora from 'ora'
 
@@ -52,6 +54,8 @@ export default class Deploy extends Command {
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --wallet ./private-key.txt',
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --private-key "0x..."',
     '<%= config.bin %> deploy --arns-name my-app --on-demand ario --max-token-amount 1000',
+    '<%= config.bin %> deploy --arns-name my-app --uploader https://up.arweave.net',
+    '<%= config.bin %> deploy --no-arns --wallet ./wallet.json  # Upload only, no ArNS update',
   ]
 
   static override flags = extractFlags(deployFlagConfigs)
@@ -60,11 +64,11 @@ export default class Deploy extends Command {
     try {
       const { flags } = await this.parse(Deploy)
 
-      // Check if we need interactive mode (no arns-name provided)
-      const interactive = !flags['arns-name']
+      // Check if we need interactive mode (no arns-name provided and not in no-arns mode)
+      const interactive = !flags['arns-name'] && !flags['no-arns']
 
       if (interactive) {
-        this.log(chalk.cyan.bold('\n🎯 Interactive Deployment Mode\n'))
+        this.log(chalk.cyan.bold('\nInteractive Deployment Mode\n'))
       }
 
       // Resolve base configuration - prompts will run automatically in interactive mode
@@ -115,12 +119,14 @@ export default class Deploy extends Command {
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
         'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
+        'no-arns': baseConfig['no-arns'],
         'no-dedupe': baseConfig['no-dedupe'],
         'on-demand': advancedOptions?.onDemand || baseConfig['on-demand'],
         'private-key': walletConfig.privateKey,
         'sig-type': baseConfig['sig-type'],
         'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
         undername: advancedOptions?.undername || baseConfig.undername,
+        uploader: baseConfig.uploader,
         wallet: walletConfig.wallet,
       }
 
@@ -160,36 +166,41 @@ export default class Deploy extends Command {
       // All validation is now handled in resolveDeployConfig
       const arioProcess = deployConfig['ario-process']
 
-      this.log(chalk.cyan.bold('\n🚀 Starting deployment...\n'))
+      this.log(chalk.cyan.bold('\nStarting deployment...\n'))
       try {
-        // Initialize ARIO
-        const spinner = ora('Initializing ARIO').start()
+        const spinner = ora()
 
-        const ao = connect({
-          CU_URL: 'https://cu.ardrive.io',
-          MODE: 'legacy',
-          MU_URL: 'https://mu.ao-testnet.xyz',
-        })
+        // Initialize ARIO and get ArNS record (skip if --no-arns)
+        let arnsNameRecord
+        if (!deployConfig['no-arns']) {
+          spinner.start('Initializing ARIO')
 
-        const ario = ARIO.init({
-          process: new AOProcess({
-            ao,
-            processId: arioProcess,
-          }),
-        })
-
-        spinner.succeed('ARIO initialized')
-
-        // Get ArNS record
-        spinner.start(`Fetching ArNS record for ${chalk.yellow(deployConfig['arns-name'])}`)
-        const arnsNameRecord = await ario
-          .getArNSRecord({ name: deployConfig['arns-name'] })
-          .catch(() => {
-            spinner.fail(`ArNS name ${chalk.red(deployConfig['arns-name'])} does not exist`)
-            this.error(`ArNS name [${deployConfig['arns-name']}] does not exist`)
+          const ao = connect({
+            CU_URL: 'https://cu.ardrive.io',
+            MODE: 'legacy',
+            MU_URL: 'https://mu.ao-testnet.xyz',
           })
 
-        spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
+          const ario = ARIO.init({
+            process: new AOProcess({
+              ao,
+              processId: arioProcess,
+            }),
+          })
+
+          spinner.succeed('ARIO initialized')
+
+          // Get ArNS record
+          spinner.start(`Fetching ArNS record for ${chalk.yellow(deployConfig['arns-name'])}`)
+          arnsNameRecord = await ario
+            .getArNSRecord({ name: deployConfig['arns-name'] })
+            .catch(() => {
+              spinner.fail(`ArNS name ${chalk.red(deployConfig['arns-name'])} does not exist`)
+              this.error(`ArNS name [${deployConfig['arns-name']}] does not exist`)
+            })
+
+          spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
+        }
 
         // Create signer
         spinner.start('Creating signer')
@@ -198,10 +209,15 @@ export default class Deploy extends Command {
 
         // Initialize Turbo
         spinner.start('Initializing Turbo')
-        const turbo = TurboFactory.authenticated({
-          signer,
-          token,
-        })
+
+        const turboFactoryArgs: TurboAuthenticatedConfiguration = { signer, token }
+
+        if (deployConfig.uploader) {
+          turboFactoryArgs.uploadServiceConfig = { url: deployConfig.uploader }
+        }
+
+        const turbo = TurboFactory.authenticated(turboFactoryArgs)
+
         spinner.succeed('Turbo initialized')
 
         // Create on-demand funding mode if specified
@@ -377,35 +393,37 @@ export default class Deploy extends Command {
 
         this.log('')
 
-        // Initialize ANT and update record
-        spinner.start('Updating ANT record')
-        const ant = ANT.init({ processId: arnsNameRecord.processId, signer })
+        // Initialize ANT and update record (skip if --no-arns)
+        if (!deployConfig['no-arns'] && arnsNameRecord) {
+          spinner.start('Updating ANT record')
+          const ant = ANT.init({ processId: arnsNameRecord.processId, signer })
 
-        await ant.setRecord(
-          {
-            transactionId: txOrManifestId,
-            ttlSeconds: Number.parseInt(deployConfig['ttl-seconds'], 10),
-            undername: deployConfig.undername,
-          },
-          {
-            tags: [
-              {
-                name: 'App-Name',
-                value: 'Permaweb-Deploy',
-              },
-              ...(process.env.GITHUB_SHA
-                ? [
-                    {
-                      name: 'GIT-HASH',
-                      value: process.env.GITHUB_SHA,
-                    },
-                  ]
-                : []),
-            ],
-          },
-        )
+          await ant.setRecord(
+            {
+              transactionId: txOrManifestId,
+              ttlSeconds: Number.parseInt(deployConfig['ttl-seconds'], 10),
+              undername: deployConfig.undername,
+            },
+            {
+              tags: [
+                {
+                  name: 'App-Name',
+                  value: 'Permaweb-Deploy',
+                },
+                ...(process.env.GITHUB_SHA
+                  ? [
+                      {
+                        name: 'GIT-HASH',
+                        value: process.env.GITHUB_SHA,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          )
 
-        spinner.succeed('ANT record updated')
+          spinner.succeed('ANT record updated')
+        }
 
         // Display deployment details in a table inside a success box
         const table = new Table({
@@ -415,25 +433,35 @@ export default class Deploy extends Command {
           },
         })
 
-        table.push(
-          ['Tx ID', chalk.green(txOrManifestId)],
-          ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
-          ['Undername', chalk.yellow(deployConfig.undername)],
-          ['ANT', chalk.cyan(arnsNameRecord.processId)],
-          ['ARIO Process', chalk.gray(arioProcess)],
-          ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
-        )
+        table.push(['Tx ID', chalk.green(txOrManifestId)])
 
-        const successMessage = boxen(
-          `${chalk.green.bold('✨ Deployment Successful!')}\n\n${table.toString()}`,
-          {
-            borderColor: 'green',
-            borderStyle: 'round',
-            padding: 1,
-            title: chalk.bold('🚀 Permaweb Deploy'),
-            titleAlignment: 'center',
-          },
-        )
+        if (deployConfig.uploader) {
+          table.push(['Uploader', chalk.cyan(deployConfig.uploader)])
+        }
+
+        if (!deployConfig['no-arns'] && arnsNameRecord) {
+          table.push(
+            ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
+            ['Undername', chalk.yellow(deployConfig.undername)],
+            ['ANT', chalk.cyan(arnsNameRecord.processId)],
+            ['ARIO Process', chalk.gray(arioProcess)],
+            ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
+          )
+        }
+
+        table.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
+
+        const message = deployConfig['no-arns']
+          ? chalk.green.bold('Upload Successful!')
+          : chalk.green.bold('Deployment Successful!')
+
+        const successMessage = boxen(`${message}\n\n${table.toString()}`, {
+          borderColor: 'green',
+          borderStyle: 'round',
+          padding: 1,
+          title: chalk.bold('Permaweb Deploy'),
+          titleAlignment: 'center',
+        })
 
         this.log(`\n${successMessage}`)
       } catch (error) {
@@ -444,7 +472,7 @@ export default class Deploy extends Command {
     } catch (error) {
       // Handle user cancellation (Ctrl+C)
       if (error instanceof Error && error.name === 'ExitPromptError') {
-        this.log(chalk.yellow('\n\n👋 Deployment cancelled'))
+        this.log(chalk.yellow('\n\nDeployment cancelled'))
         this.exit(0)
       }
 

@@ -101,6 +101,13 @@ export const globalFlags = {
       required: false,
     }),
   }),
+  noArns: createFlagConfig<boolean>({
+    flag: Flags.boolean({
+      default: false,
+      description: 'Skip ArNS update and only perform upload',
+      required: false,
+    }),
+  }),
   noDedupe: createFlagConfig<boolean>({
     flag: Flags.boolean({
       default: false,
@@ -165,6 +172,12 @@ export const globalFlags = {
       required: false,
     }),
   }),
+  uploader: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Custom uploader service URL',
+      required: false,
+    }),
+  }),
   wallet: createFlagConfig<string | undefined>({
     flag: Flags.string({
       char: 'w',
@@ -193,12 +206,14 @@ export const deployFlags = {
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
+  'no-arns': globalFlags.noArns.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
   'on-demand': globalFlags.onDemand.flag,
   'private-key': globalFlags.privateKey.flag,
   'sig-type': globalFlags.sigType.flag,
   'ttl-seconds': globalFlags.ttlSeconds.flag,
   undername: globalFlags.undername.flag,
+  uploader: globalFlags.uploader.flag,
   wallet: globalFlags.wallet.flag,
 }
 
@@ -231,12 +246,14 @@ export interface DeployConfig {
   'deploy-file'?: string
   'deploy-folder': string
   'max-token-amount'?: string
+  'no-arns': boolean
   'no-dedupe': boolean
   'on-demand'?: string
   'private-key'?: string
   'sig-type': string
   'ttl-seconds': string
   undername: string
+  uploader?: string
   wallet?: string
 }
 
@@ -251,11 +268,13 @@ export const deployFlagConfigs = {
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
   'max-token-amount': globalFlags.maxTokenAmount,
+  'no-arns': globalFlags.noArns,
   'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
   'sig-type': globalFlags.sigType,
   'ttl-seconds': globalFlags.ttlSeconds,
   undername: globalFlags.undername,
+  uploader: globalFlags.uploader,
   wallet: globalFlags.wallet,
 } as const

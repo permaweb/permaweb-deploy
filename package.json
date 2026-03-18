@@ -1,6 +1,6 @@
 {
   "name": "permaweb-deploy",
-  "version": "3.2.1",
+  "version": "3.3.1",
   "description": "Permaweb App Deployment Package",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,6 +9,7 @@
     "permaweb-deploy": "./bin/run.js"
   },
   "scripts": {
+    "clean:install": "rm -rf node_modules package-lock.json || true && npm cache clean --force && npm install",
     "build": "vite build && tsc --emitDeclarationOnly",
     "dev": "./bin/dev.js",
     "test": "vitest",

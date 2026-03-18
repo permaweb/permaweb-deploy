@@ -1,5 +1,11 @@
 # permaweb-deploy
 
+## 3.5.0
+
+### Minor Changes
+
+- e3611a6: Add upload only option / uploader config
+
 ## 3.2.1
 
 ### Patch Changes

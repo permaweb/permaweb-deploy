@@ -4,7 +4,7 @@ import { Flags } from '@oclif/core'
 import { promptArioProcess, promptArnsName } from '../prompts/arns.js'
 import { promptDeployTarget } from '../prompts/deployment.js'
 import { promptSignerType } from '../prompts/wallet.js'
-import { createFlagConfig } from '../utils/config-resolver.js'
+import { createFlagConfig, type ResolvedConfig } from '../utils/config-resolver.js'
 import { TTL_MAX, TTL_MIN } from '../utils/constants.js'
 import {
   resolveArioProcess,
@@ -101,13 +101,6 @@ export const globalFlags = {
       required: false,
     }),
   }),
-  noArns: createFlagConfig<boolean>({
-    flag: Flags.boolean({
-      default: false,
-      description: 'Skip ArNS update and only perform upload',
-      required: false,
-    }),
-  }),
   noDedupe: createFlagConfig<boolean>({
     flag: Flags.boolean({
       default: false,
@@ -174,7 +167,8 @@ export const globalFlags = {
   }),
   uploader: createFlagConfig<string | undefined>({
     flag: Flags.string({
-      description: 'Custom uploader service URL',
+      description:
+        'Base URL of the Turbo bundler service to use (omit for ArDrive production: https://upload.ardrive.io). Examples: https://up.arweave.net (Arweave), https://upload.ardrive.dev (dev). The host must implement the Turbo bundler protocol; path/query are not required on the URL.',
       required: false,
     }),
   }),
@@ -206,7 +200,6 @@ export const deployFlags = {
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
-  'no-arns': globalFlags.noArns.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
   'on-demand': globalFlags.onDemand.flag,
   'private-key': globalFlags.privateKey.flag,
@@ -246,7 +239,6 @@ export interface DeployConfig {
   'deploy-file'?: string
   'deploy-folder': string
   'max-token-amount'?: string
-  'no-arns': boolean
   'no-dedupe': boolean
   'on-demand'?: string
   'private-key'?: string
@@ -268,7 +260,6 @@ export const deployFlagConfigs = {
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
   'max-token-amount': globalFlags.maxTokenAmount,
-  'no-arns': globalFlags.noArns,
   'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
@@ -278,3 +269,21 @@ export const deployFlagConfigs = {
   uploader: globalFlags.uploader,
   wallet: globalFlags.wallet,
 } as const
+
+/**
+ * Upload command — file/folder to Arweave via Turbo without updating ArNS
+ */
+export const uploadFlagConfigs = {
+  'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
+  'deploy-file': globalFlags.deployFile,
+  'deploy-folder': globalFlags.deployFolder,
+  'max-token-amount': globalFlags.maxTokenAmount,
+  'no-dedupe': globalFlags.noDedupe,
+  'on-demand': globalFlags.onDemand,
+  'private-key': globalFlags.privateKey,
+  'sig-type': globalFlags.sigType,
+  uploader: globalFlags.uploader,
+  wallet: globalFlags.wallet,
+} as const
+
+export type UploadConfig = ResolvedConfig<typeof uploadFlagConfigs>

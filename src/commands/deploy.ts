@@ -220,11 +220,13 @@ export default class Deploy extends Command {
           ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
         )
 
+        const isCI = Boolean(process.env.CI)
         const successMessage = boxen(
           `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
           {
             borderColor: 'green',
-            borderStyle: 'round',
+            borderStyle: isCI ? 'single' : 'round',
+            fullscreen: isCI ? (width: number) => [width, 0] : undefined,
             padding: 1,
             title: chalk.bold('Permaweb Deploy'),
             titleAlignment: 'center',

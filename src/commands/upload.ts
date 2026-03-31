@@ -108,33 +108,43 @@ export default class Upload extends Command {
 
         this.log('')
 
-        const table = new Table({
-          head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
-          style: { head: [] },
-        })
-
-        table.push(['Tx ID', chalk.green(txOrManifestId)])
-
-        if (uploadCfg.uploader) {
-          table.push(['Bundler service', chalk.cyan(uploadCfg.uploader)])
-        }
-
-        table.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
-
         const isCI = Boolean(process.env.CI)
-        const successMessage = boxen(
-          `${chalk.green.bold('Upload successful!')}\n\n${table.toString()}`,
-          {
-            borderColor: 'green',
-            borderStyle: isCI ? 'single' : 'round',
-            fullscreen: isCI ? (width: number) => [width, 0] : undefined,
-            padding: 1,
-            title: chalk.bold('Permaweb Deploy'),
-            titleAlignment: 'center',
-          },
-        )
 
-        this.log(`\n${successMessage}`)
+        if (isCI) {
+          this.log('Upload successful!')
+          this.log('Tx ID: ' + txOrManifestId)
+          if (uploadCfg.uploader) {
+            this.log('Bundler service: ' + uploadCfg.uploader)
+          }
+
+          this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
+        } else {
+          const table = new Table({
+            head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
+            style: { head: [] },
+          })
+
+          table.push(['Tx ID', chalk.green(txOrManifestId)])
+
+          if (uploadCfg.uploader) {
+            table.push(['Bundler service', chalk.cyan(uploadCfg.uploader)])
+          }
+
+          table.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
+
+          const successMessage = boxen(
+            `${chalk.green.bold('Upload successful!')}\n\n${table.toString()}`,
+            {
+              borderColor: 'green',
+              borderStyle: 'round',
+              padding: 1,
+              title: chalk.bold('Permaweb Deploy'),
+              titleAlignment: 'center',
+            },
+          )
+
+          this.log(`\n${successMessage}`)
+        }
       } catch (error) {
         this.error(
           chalk.red(`Upload failed: ${error instanceof Error ? error.message : String(error)}`),

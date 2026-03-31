@@ -200,40 +200,55 @@ export default class Deploy extends Command {
 
         spinner.succeed('ANT record updated')
 
-        const table = new Table({
-          head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
-          style: {
-            head: [],
-          },
-        })
-
-        table.push(
-          ['Tx ID', chalk.green(txOrManifestId)],
-          ...(deployConfig.uploader
-            ? ([['Bundler service', chalk.cyan(deployConfig.uploader)]] as [string, string][])
-            : []),
-          ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
-          ['Undername', chalk.yellow(deployConfig.undername)],
-          ['ANT', chalk.cyan(arnsNameRecord.processId)],
-          ['ARIO Process', chalk.gray(arioProcess)],
-          ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
-          ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
-        )
-
         const isCI = Boolean(process.env.CI)
-        const successMessage = boxen(
-          `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
-          {
-            borderColor: 'green',
-            borderStyle: isCI ? 'single' : 'round',
-            fullscreen: isCI ? (width: number) => [width, 0] : undefined,
-            padding: 1,
-            title: chalk.bold('Permaweb Deploy'),
-            titleAlignment: 'center',
-          },
-        )
 
-        this.log(`\n${successMessage}`)
+        if (isCI) {
+          this.log('Deployment Successful!')
+          this.log('Tx ID: ' + txOrManifestId)
+          if (deployConfig.uploader) {
+            this.log('Bundler service: ' + deployConfig.uploader)
+          }
+
+          this.log('ArNS Name: ' + deployConfig['arns-name'])
+          this.log('Undername: ' + deployConfig.undername)
+          this.log('ANT: ' + arnsNameRecord.processId)
+          this.log('ARIO Process: ' + arioProcess)
+          this.log('TTL Seconds: ' + deployConfig['ttl-seconds'])
+          this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
+        } else {
+          const table = new Table({
+            head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
+            style: {
+              head: [],
+            },
+          })
+
+          table.push(
+            ['Tx ID', chalk.green(txOrManifestId)],
+            ...(deployConfig.uploader
+              ? ([['Bundler service', chalk.cyan(deployConfig.uploader)]] as [string, string][])
+              : []),
+            ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
+            ['Undername', chalk.yellow(deployConfig.undername)],
+            ['ANT', chalk.cyan(arnsNameRecord.processId)],
+            ['ARIO Process', chalk.gray(arioProcess)],
+            ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
+            ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
+          )
+
+          const successMessage = boxen(
+            `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
+            {
+              borderColor: 'green',
+              borderStyle: 'round',
+              padding: 1,
+              title: chalk.bold('Permaweb Deploy'),
+              titleAlignment: 'center',
+            },
+          )
+
+          this.log(`\n${successMessage}`)
+        }
       } catch (error) {
         this.error(
           chalk.red(`Deployment failed: ${error instanceof Error ? error.message : String(error)}`),

@@ -13,6 +13,12 @@ import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
 import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
+import {
+  type HyperbeamBundlerAutoFundOptions,
+  HyperbeamBundlerClient,
+  parseHyperbeamFundAmount,
+  type UploadClient,
+} from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
 import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
@@ -21,10 +27,17 @@ export interface UploadWorkflowConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
+  'hyperbeam-ao-state-url'?: string
+  'hyperbeam-auto-fund'?: boolean
+  'hyperbeam-fund-amount'?: string
+  'hyperbeam-ledger-id'?: string
+  'hyperbeam-token-id'?: string
+  'hyperbeam-upload-path'?: string
   'max-token-amount'?: string
   'on-demand'?: string
   'sig-type': string
   uploader?: string
+  'uploader-type'?: string
 }
 
 function getFolderSize(folderPath: string): number {
@@ -59,21 +72,63 @@ export async function runUploadWorkflow(
 ): Promise<string> {
   const spinner = ora()
 
-  spinner.start('Creating signer')
-  const { signer, token } = createSigner(config['sig-type'] as SignerType, deployKey)
-  spinner.succeed(`Signer created (${chalk.cyan(config['sig-type'])})`)
+  const uploaderType = config['uploader-type'] ?? 'turbo'
+  let uploadClient: UploadClient
+  let turbo: ReturnType<typeof TurboFactory.authenticated> | undefined
 
-  spinner.start('Initializing Turbo')
+  if (uploaderType === 'hyperbeam') {
+    if (config['sig-type'] !== 'arweave') {
+      io.error('HyperBEAM uploads require --sig-type arweave')
+    }
 
-  const turboFactoryArgs: TurboAuthenticatedConfiguration = { signer, token }
+    if (!config.uploader) {
+      io.error('HyperBEAM uploads require --uploader <node-url>')
+    }
 
-  if (config.uploader) {
-    turboFactoryArgs.uploadServiceConfig = { url: config.uploader }
+    if (config['on-demand']) {
+      io.error('HyperBEAM uploads do not support Turbo --on-demand payments')
+    }
+
+    let autoFund: HyperbeamBundlerAutoFundOptions | undefined
+    if (config['hyperbeam-auto-fund']) {
+      autoFund = {
+        deployKey,
+        uploader: config.uploader,
+      }
+      if (config['hyperbeam-ao-state-url']) autoFund.aoStateUrl = config['hyperbeam-ao-state-url']
+      if (config['hyperbeam-ledger-id']) autoFund.ledgerId = config['hyperbeam-ledger-id']
+      if (config['hyperbeam-token-id']) autoFund.tokenId = config['hyperbeam-token-id']
+      if (config['hyperbeam-fund-amount']) {
+        autoFund.minimumBalance = parseHyperbeamFundAmount(config['hyperbeam-fund-amount'])
+      }
+    }
+
+    spinner.start('Initializing HyperBEAM bundler')
+    uploadClient = new HyperbeamBundlerClient({
+      autoFund,
+      deployKey,
+      uploadPath: config['hyperbeam-upload-path'] ?? '/~bundler@1.0/item?codec-device=ans104@1.0',
+      uploader: config.uploader,
+    })
+    spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(config.uploader)})`)
+  } else {
+    spinner.start('Creating signer')
+    const { signer, token } = createSigner(config['sig-type'] as SignerType, deployKey)
+    spinner.succeed(`Signer created (${chalk.cyan(config['sig-type'])})`)
+
+    spinner.start('Initializing Turbo')
+
+    const turboFactoryArgs: TurboAuthenticatedConfiguration = { signer, token }
+
+    if (config.uploader) {
+      turboFactoryArgs.uploadServiceConfig = { url: config.uploader }
+    }
+
+    turbo = TurboFactory.authenticated(turboFactoryArgs)
+    uploadClient = turbo as UploadClient
+
+    spinner.succeed('Turbo initialized')
   }
-
-  const turbo = TurboFactory.authenticated(turboFactoryArgs)
-
-  spinner.succeed('Turbo initialized')
 
   let fundingMode: OnDemandFunding | undefined
   if (config['on-demand'] && config['max-token-amount']) {
@@ -103,7 +158,7 @@ export async function runUploadWorkflow(
     })
   }
 
-  if (!fundingMode) {
+  if (!fundingMode && turbo) {
     spinner.start('Checking Turbo credits for upload')
 
     try {
@@ -156,7 +211,7 @@ export async function runUploadWorkflow(
       spinner.start(`Uploading file ${chalk.yellow(config['deploy-file'])}`)
 
       let cache = config['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-      const uploadResult = await uploadFile(turbo, filePath, { cache, fundingMode })
+      const uploadResult = await uploadFile(uploadClient, filePath, { cache, fundingMode })
 
       if (!uploadResult.transactionId) {
         spinner.fail('File upload failed: no transaction ID returned')
@@ -182,8 +237,9 @@ export async function runUploadWorkflow(
       spinner.start(`Uploading folder ${chalk.yellow(config['deploy-folder'])}`)
 
       let cache = config['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-      const uploadResult: FolderUploadResult = await uploadFolder(turbo, folderPath, {
+      const uploadResult: FolderUploadResult = await uploadFolder(uploadClient, folderPath, {
         cache,
+        concurrency: config['hyperbeam-auto-fund'] ? 1 : undefined,
         fundingMode,
         throwOnFailure: true,
       })

@@ -42,6 +42,7 @@ export interface UploadClient {
 }
 
 export interface HyperbeamBundlerOptions {
+  autoFund?: HyperbeamBundlerAutoFundOptions
   deployKey: string
   uploadPath: string
   uploader: string
@@ -54,6 +55,18 @@ export interface HyperbeamAutoFundOptions {
   deployKey: string
   ledgerId?: string
   minimumBalance: bigint
+  tokenId?: string
+  uploader: string
+}
+
+export interface HyperbeamBundlerAutoFundOptions {
+  aoPollMs?: number
+  aoStateUrl?: string
+  aoTimeoutMs?: number
+  deployKey: string
+  ledgerId?: string
+  minimumBalance?: bigint
+  quoteAction?: string
   tokenId?: string
   uploader: string
 }
@@ -160,6 +173,36 @@ export async function autoFundHyperbeamLedger(
   })
 }
 
+export async function autoFundQuotedHyperbeamLedger(
+  options: { signedBytes: number } & HyperbeamBundlerAutoFundOptions,
+): Promise<FundingResult> {
+  const client = new HyperbalanceClient({ nodeUrl: options.uploader })
+  let { ledgerId } = options
+  let { minimumBalance } = options
+  let { tokenId } = options
+
+  if (minimumBalance === undefined) {
+    const quote = await client.quoteAuto({
+      action: options.quoteAction ?? 'hyperbeam-upload',
+      params: { bytes: options.signedBytes },
+    })
+    minimumBalance = quote.amount
+    ledgerId ??= quote.ledgerId
+    tokenId ??= quote.tokenId
+  }
+
+  return autoFundHyperbeamLedger({
+    aoPollMs: options.aoPollMs,
+    aoStateUrl: options.aoStateUrl,
+    aoTimeoutMs: options.aoTimeoutMs,
+    deployKey: options.deployKey,
+    ledgerId,
+    minimumBalance,
+    tokenId,
+    uploader: options.uploader,
+  })
+}
+
 export function hyperbeamBundlerLink(uploader: string, id: string): string {
   const normalizedBase = uploader.endsWith('/') ? uploader : `${uploader}/`
   return new URL(`~arweave@2.9/raw=${encodeURIComponent(id)}`, normalizedBase).toString()
@@ -180,15 +223,17 @@ function responseId(headers: Headers, body: string): string | undefined {
 }
 
 export class HyperbeamBundlerClient implements UploadClient {
+  private readonly autoFund?: HyperbeamBundlerAutoFundOptions
   private readonly signer: unknown
   private readonly uploader: string
   private readonly uploadUrl: string
 
-  constructor({ deployKey, uploadPath, uploader }: HyperbeamBundlerOptions) {
+  constructor({ autoFund, deployKey, uploadPath, uploader }: HyperbeamBundlerOptions) {
     const jwk = JSON.parse(Buffer.from(deployKey, 'base64').toString('utf8')) as Record<
       string,
       unknown
     >
+    this.autoFund = autoFund
     this.signer = new ArweaveSigner(jwk)
     this.uploader = uploader
     this.uploadUrl = normalizeUploadUrl(uploader, uploadPath)
@@ -207,6 +252,14 @@ export class HyperbeamBundlerClient implements UploadClient {
 
     const raw = Buffer.from(item.getRaw())
     const localId = item.id || toBase64Url(new DataItem(raw).id)
+
+    if (this.autoFund) {
+      await autoFundQuotedHyperbeamLedger({
+        ...this.autoFund,
+        signedBytes: raw.length,
+      })
+    }
+
     const res = await fetch(this.uploadUrl, {
       body: raw,
       headers: {

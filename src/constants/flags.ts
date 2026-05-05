@@ -110,8 +110,7 @@ export const globalFlags = {
   }),
   hyperbeamFundAmount: createFlagConfig<string | undefined>({
     flag: Flags.string({
-      description:
-        'Minimum HyperBEAM local ledger balance to ensure before upload, in token base units.',
+      description: 'Optional minimum HyperBEAM local ledger balance override, in token base units.',
       required: false,
     }),
   }),

@@ -232,15 +232,14 @@ permaweb-deploy upload \
   --deploy-folder ./dist \
   --uploader-type hyperbeam \
   --uploader https://hyperbeam.example.com \
-  --hyperbeam-auto-fund \
-  --hyperbeam-fund-amount 1000000000000
+  --hyperbeam-auto-fund
 ```
 
 **Notes:**
 
 - Turbo billing and signer behavior follow Turbo.
-- HyperBEAM uploads require an Arweave JWK signer. If the node requires payment, the node handles that flow. When a node rejects an upload with `402` and advertises [hyperbalance](https://github.com/xylophonez/hyperbalance) payment metadata, the CLI prints the advertised token, ledger, and deposit details. With `--hyperbeam-auto-fund`, the CLI sends the advertised token to the node deposit address, imports that deposit into the advertised local ledger for the uploader wallet, and waits for the local balance before uploading. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
-- `--hyperbeam-fund-amount` is the minimum local ledger balance to ensure, in token base units. The token and ledger are inferred from the node metadata; use `--hyperbeam-token-id` or `--hyperbeam-ledger-id` only when the node advertises multiple choices.
+- HyperBEAM uploads require an Arweave JWK signer. If the node requires payment, the node handles that flow. When a node rejects an upload with `402` and advertises [hyperbalance](https://github.com/xylophonez/hyperbalance) payment metadata, the CLI prints the advertised token, ledger, and deposit details. With `--hyperbeam-auto-fund`, the CLI signs each data item, asks the node for a quote for the signed byte count, sends the advertised token to the node deposit address, imports that deposit into the advertised local ledger for the uploader wallet, and waits for the local balance before uploading. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
+- `--hyperbeam-fund-amount` is an optional override for the minimum local ledger balance to ensure, in token base units. Without it, `--hyperbeam-auto-fund` uses the node's advertised quote route. The token and ledger are inferred from the node metadata; use `--hyperbeam-token-id` or `--hyperbeam-ledger-id` only when the node advertises multiple choices.
 - Use a **base URL only** (e.g. `https://up.arweave.net` or `https://hyperbeam.example.com`), not a path to a specific file or route.
 
 ### Command Options
@@ -264,7 +263,7 @@ permaweb-deploy upload \
 - `--uploader-type`: Upload protocol to use (`turbo` or `hyperbeam`). Default: `turbo`
 - `--hyperbeam-upload-path`: HyperBEAM bundler route. Default: `/~bundler@1.0/item?codec-device=ans104@1.0`
 - `--hyperbeam-auto-fund`: Automatically fund the HyperBEAM local ledger before upload
-- `--hyperbeam-fund-amount`: Minimum HyperBEAM local ledger balance to ensure before upload, in token base units
+- `--hyperbeam-fund-amount`: Optional minimum HyperBEAM local ledger balance override, in token base units
 - `--hyperbeam-token-id`: Hyperbalance token ID to fund when the node advertises multiple tokens
 - `--hyperbeam-ledger-id`: Hyperbalance ledger ID to fund when the node advertises multiple ledgers
 - `--hyperbeam-ao-state-url`: AO state endpoint used while waiting for auto-fund transfer assignment. Default: `https://state.forward.computer`
@@ -455,7 +454,6 @@ jobs:
     uploader-type: hyperbeam
     uploader: https://hyperbeam.example.com
     hyperbeam-auto-fund: 'true'
-    hyperbeam-fund-amount: '1000000000000'
 ```
 
 ### Disabling Deduplication

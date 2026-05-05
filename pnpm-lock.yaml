@@ -37,7 +37,7 @@ importers:
         version: 0.6.5
       hyperbalance:
         specifier: github:xylophonez/hyperbalance
-        version: https://codeload.github.com/xylophonez/hyperbalance/tar.gz/1f7cc94e7516eeda6422b17b7a4f5b310e9b4f58
+        version: https://codeload.github.com/xylophonez/hyperbalance/tar.gz/ecc33d0997120ffd8b1db4555966c6a2243f2ed6
       mime-types:
         specifier: ^3.0.1
         version: 3.0.2
@@ -3928,8 +3928,8 @@ packages:
     resolution: {integrity: sha512-7wvJxzAEBREKotXGuHOSri8/J+D0oURqCbNmn8g7Ym8hVMJQkGCMMS9y2/GktMtRyxPVcw2xWFh2oPa970PmXQ==}
     engines: {node: '>=18'}
 
-  hyperbalance@https://codeload.github.com/xylophonez/hyperbalance/tar.gz/1f7cc94e7516eeda6422b17b7a4f5b310e9b4f58:
-    resolution: {tarball: https://codeload.github.com/xylophonez/hyperbalance/tar.gz/1f7cc94e7516eeda6422b17b7a4f5b310e9b4f58}
+  hyperbalance@https://codeload.github.com/xylophonez/hyperbalance/tar.gz/ecc33d0997120ffd8b1db4555966c6a2243f2ed6:
+    resolution: {tarball: https://codeload.github.com/xylophonez/hyperbalance/tar.gz/ecc33d0997120ffd8b1db4555966c6a2243f2ed6}
     version: 0.1.0
     engines: {node: '>=18'}
 
@@ -11651,7 +11651,7 @@ snapshots:
 
   hyper-async@1.2.0: {}
 
-  hyperbalance@https://codeload.github.com/xylophonez/hyperbalance/tar.gz/1f7cc94e7516eeda6422b17b7a4f5b310e9b4f58: {}
+  hyperbalance@https://codeload.github.com/xylophonez/hyperbalance/tar.gz/ecc33d0997120ffd8b1db4555966c6a2243f2ed6: {}
 
   iconv-lite@0.7.2:
     dependencies:

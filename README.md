@@ -227,7 +227,7 @@ permaweb-deploy deploy \
 **Notes:**
 
 - Turbo billing and signer behavior follow Turbo.
-- HyperBEAM uploads require an Arweave JWK signer. If the node requires payment, the node handles that flow. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
+- HyperBEAM uploads require an Arweave JWK signer. If the node requires payment, the node handles that flow. When a node rejects an upload with `402` and advertises [hyperbalance](https://github.com/xylophonez/hyperbalance) payment metadata, the CLI prints the advertised token, ledger, and deposit details. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
 - Use a **base URL only** (e.g. `https://up.arweave.net` or `https://hyperbeam.example.com`), not a path to a specific file or route.
 
 ### Command Options

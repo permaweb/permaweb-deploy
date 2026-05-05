@@ -2,6 +2,12 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import { Readable } from 'node:stream'
 
+import {
+  discoverPaymentProfile,
+  type HyperbalanceProfile,
+  MissingDiscoveryError,
+} from 'hyperbalance'
+
 const require = createRequire(import.meta.url)
 const { ArweaveSigner, DataItem, createData } = require('@dha-team/arbundles') as {
   ArweaveSigner: new (jwk: Record<string, unknown>) => unknown
@@ -100,6 +106,7 @@ function responseId(headers: Headers, body: string): string | undefined {
 
 export class HyperbeamBundlerClient implements UploadClient {
   private readonly signer: unknown
+  private readonly uploader: string
   private readonly uploadUrl: string
 
   constructor({ deployKey, uploadPath, uploader }: HyperbeamBundlerOptions) {
@@ -108,6 +115,7 @@ export class HyperbeamBundlerClient implements UploadClient {
       unknown
     >
     this.signer = new ArweaveSigner(jwk)
+    this.uploader = uploader
     this.uploadUrl = normalizeUploadUrl(uploader, uploadPath)
   }
 
@@ -136,11 +144,56 @@ export class HyperbeamBundlerClient implements UploadClient {
 
     if (!res.ok) {
       const preview = body.replaceAll(/\s+/g, ' ').trim().slice(0, 300)
+      const paymentHint = res.status === 402 ? await this.paymentHint() : undefined
       throw new Error(
-        `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+        [
+          `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+          paymentHint,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       )
     }
 
     return { id: responseId(res.headers, body) || localId }
   }
+
+  private async paymentHint(): Promise<string | undefined> {
+    try {
+      return hyperbalanceFundingHint(await discoverPaymentProfile(this.uploader))
+    } catch (error) {
+      if (error instanceof MissingDiscoveryError) {
+        return undefined
+      }
+
+      return undefined
+    }
+  }
+}
+
+export function hyperbalanceFundingHint(profile: HyperbalanceProfile): string | undefined {
+  const lines = profile.tokens
+    .map((token) => {
+      const depositAddress = token.depositAddress ?? profile.node?.operator
+      if (!depositAddress) return
+
+      const label = token.ticker ? `${token.ticker} (${token.id})` : token.id
+      const ledger = token.ledgerId
+        ? profile.ledgers.find((candidate) => candidate.id === token.ledgerId)
+        : undefined
+      const ledgerInfo = ledger
+        ? ` Local ledger: ${ledger.id}${ledger.route ? ` at ${ledger.route}` : ''}.`
+        : ''
+
+      return `- ${label}: send funds to ${depositAddress}.${ledgerInfo}`
+    })
+    .filter(Boolean)
+
+  if (lines.length === 0) return undefined
+
+  return [
+    'The HyperBEAM node advertised hyperbalance funding metadata:',
+    ...lines,
+    'Set the local ledger recipient to the uploader wallet address when the token flow supports it.',
+  ].join('\n')
 }

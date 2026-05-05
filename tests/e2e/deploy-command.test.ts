@@ -195,6 +195,52 @@ describe(
         expect(error).toBeDefined()
         expect(error?.message).toMatch(/require --uploader/)
       })
+
+      it('should include hyperbalance funding metadata when a HyperBEAM upload needs payment', async () => {
+        server.use(
+          http.get('https://hyperbeam.test/.well-known/hyperbalance', () =>
+            HttpResponse.json({
+              ledgers: [
+                {
+                  balancePath: '/ledger~process@1.0/now/balance/{address}',
+                  id: 'local-ao',
+                  route: '/ledger~process@1.0',
+                  type: 'process-ledger@1.0',
+                },
+              ],
+              node: { operator: 'node-deposit-address' },
+              tokens: [
+                {
+                  id: 'ao-mainnet',
+                  ledgerId: 'local-ao',
+                  ticker: 'AO',
+                },
+              ],
+              version: 'hyperbalance@0.1',
+            }),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () =>
+            HttpResponse.text('insufficient local ledger balance', { status: 402 }),
+          ),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('node-deposit-address')
+        expect(result.error?.message).toContain('local-ao')
+      })
     })
 
     describe('arweave signer', () => {

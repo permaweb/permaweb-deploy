@@ -22,12 +22,12 @@ export interface UploadWorkflowConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
-  'hyperbeam-upload-path': string
+  'hyperbeam-upload-path'?: string
   'max-token-amount'?: string
   'on-demand'?: string
   'sig-type': string
   uploader?: string
-  'uploader-type': string
+  'uploader-type'?: string
 }
 
 function getFolderSize(folderPath: string): number {
@@ -62,7 +62,7 @@ export async function runUploadWorkflow(
 ): Promise<string> {
   const spinner = ora()
 
-  const uploaderType = config['uploader-type']
+  const uploaderType = config['uploader-type'] ?? 'turbo'
   let uploadClient: UploadClient
   let turbo: ReturnType<typeof TurboFactory.authenticated> | undefined
 
@@ -82,7 +82,7 @@ export async function runUploadWorkflow(
     spinner.start('Initializing HyperBEAM bundler')
     uploadClient = new HyperbeamBundlerClient({
       deployKey,
-      uploadPath: config['hyperbeam-upload-path'],
+      uploadPath: config['hyperbeam-upload-path'] ?? '/~bundler@1.0/item?codec-device=ans104@1.0',
       uploader: config.uploader,
     })
     spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(config.uploader)})`)

@@ -94,6 +94,38 @@ export const globalFlags = {
       return target.type === 'folder' ? target.path : './dist'
     },
   }),
+  hyperbeamAoStateUrl: createFlagConfig<string>({
+    flag: Flags.string({
+      default: 'https://state.forward.computer',
+      description: 'AO state endpoint used to wait for HyperBEAM auto-fund transfer assignment.',
+      required: false,
+    }),
+  }),
+  hyperbeamAutoFund: createFlagConfig<boolean>({
+    flag: Flags.boolean({
+      default: false,
+      description: 'Automatically fund the HyperBEAM local ledger before upload.',
+      required: false,
+    }),
+  }),
+  hyperbeamFundAmount: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Optional minimum HyperBEAM local ledger balance override, in token base units.',
+      required: false,
+    }),
+  }),
+  hyperbeamLedgerId: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Advanced: local HyperBEAM ledger ID to use for AO auto-funding.',
+      required: false,
+    }),
+  }),
+  hyperbeamTokenId: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Advanced: AO token process ID to use for HyperBEAM auto-funding.',
+      required: false,
+    }),
+  }),
   hyperbeamUploadPath: createFlagConfig<string>({
     flag: Flags.string({
       default: '/~bundler@1.0/item?codec-device=ans104@1.0',
@@ -215,6 +247,11 @@ export const deployFlags = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
+  'hyperbeam-ao-state-url': globalFlags.hyperbeamAoStateUrl.flag,
+  'hyperbeam-auto-fund': globalFlags.hyperbeamAutoFund.flag,
+  'hyperbeam-fund-amount': globalFlags.hyperbeamFundAmount.flag,
+  'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId.flag,
+  'hyperbeam-token-id': globalFlags.hyperbeamTokenId.flag,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
@@ -256,6 +293,11 @@ export interface DeployConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
+  'hyperbeam-ao-state-url': string
+  'hyperbeam-auto-fund': boolean
+  'hyperbeam-fund-amount'?: string
+  'hyperbeam-ledger-id'?: string
+  'hyperbeam-token-id'?: string
   'hyperbeam-upload-path': string
   'max-token-amount'?: string
   'no-dedupe': boolean
@@ -279,6 +321,11 @@ export const deployFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'hyperbeam-ao-state-url': globalFlags.hyperbeamAoStateUrl,
+  'hyperbeam-auto-fund': globalFlags.hyperbeamAutoFund,
+  'hyperbeam-fund-amount': globalFlags.hyperbeamFundAmount,
+  'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId,
+  'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,
@@ -299,6 +346,11 @@ export const uploadFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'hyperbeam-ao-state-url': globalFlags.hyperbeamAoStateUrl,
+  'hyperbeam-auto-fund': globalFlags.hyperbeamAutoFund,
+  'hyperbeam-fund-amount': globalFlags.hyperbeamFundAmount,
+  'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId,
+  'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,

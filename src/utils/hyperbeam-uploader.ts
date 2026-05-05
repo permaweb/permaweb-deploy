@@ -1,6 +1,18 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import { Readable } from 'node:stream'
+
+import { createDataItemSigner, message as aoMessage } from '@permaweb/aoconnect'
+import {
+  AoTokenTransferAdapter,
+  DEFAULT_AO_TOKEN_ID,
+  discoverHyperbeamAoBundlerProfile,
+  type FundingResult,
+  HyperbalanceClient,
+  type HyperbalanceProfile,
+  waitForAoAssignmentSlot,
+} from 'hyperbalance'
 
 const require = createRequire(import.meta.url)
 const { ArweaveSigner, DataItem, createData } = require('@dha-team/arbundles') as {
@@ -30,8 +42,32 @@ export interface UploadClient {
 }
 
 export interface HyperbeamBundlerOptions {
+  autoFund?: HyperbeamBundlerAutoFundOptions
   deployKey: string
   uploadPath: string
+  uploader: string
+}
+
+export interface HyperbeamAutoFundOptions {
+  aoPollMs?: number
+  aoStateUrl?: string
+  aoTimeoutMs?: number
+  deployKey: string
+  ledgerId?: string
+  minimumBalance: bigint
+  tokenId?: string
+  uploader: string
+}
+
+export interface HyperbeamBundlerAutoFundOptions {
+  aoPollMs?: number
+  aoStateUrl?: string
+  aoTimeoutMs?: number
+  deployKey: string
+  ledgerId?: string
+  minimumBalance?: bigint
+  quoteAction?: string
+  tokenId?: string
   uploader: string
 }
 
@@ -79,6 +115,117 @@ function normalizeUploadUrl(base: string, uploadPath: string): string {
   return new URL(cleanPath, normalizedBase).toString()
 }
 
+function arweaveAddressFromJwk(jwk: Record<string, unknown>): string {
+  if (typeof jwk.n !== 'string') {
+    throw new TypeError('Arweave JWK is missing modulus field "n"')
+  }
+
+  return createHash('sha256').update(Buffer.from(jwk.n, 'base64url')).digest('base64url')
+}
+
+export function parseHyperbeamFundAmount(value: string): bigint {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error('--hyperbeam-fund-amount must be a positive integer in token base units')
+  }
+
+  return BigInt(value)
+}
+
+export async function autoFundHyperbeamLedger(
+  options: HyperbeamAutoFundOptions,
+): Promise<FundingResult> {
+  const profile = await discoverHyperbeamAoBundlerProfile({
+    ledgerId: options.ledgerId,
+    nodeUrl: options.uploader,
+    tokenId: options.tokenId,
+  })
+
+  return ensureHyperbeamCredit(options, profile)
+}
+
+async function ensureHyperbeamCredit(
+  options: HyperbeamAutoFundOptions,
+  profile: HyperbalanceProfile,
+): Promise<FundingResult> {
+  const jwk = JSON.parse(Buffer.from(options.deployKey, 'base64').toString('utf8')) as Record<
+    string,
+    unknown
+  >
+  const recipient = arweaveAddressFromJwk(jwk)
+  const signer = createDataItemSigner(jwk)
+  const client = new HyperbalanceClient({ nodeUrl: options.uploader })
+  const adapter = new AoTokenTransferAdapter({
+    async inferSender() {
+      return recipient
+    },
+    async message(input) {
+      return aoMessage({
+        data: input.data ?? '',
+        process: input.process,
+        signer,
+        tags: input.tags,
+      })
+    },
+    async waitForAssignmentSlot(messageId, context) {
+      return waitForAoAssignmentSlot({
+        messageId,
+        pollMs: options.aoPollMs,
+        processId: context.processId,
+        stateUrl: options.aoStateUrl,
+        timeoutMs: options.aoTimeoutMs,
+      })
+    },
+  })
+
+  return client.ensureCreditAuto({
+    ledgerId: options.ledgerId,
+    minimumBalance: options.minimumBalance,
+    profile,
+    recipient,
+    tokenId: options.tokenId ?? DEFAULT_AO_TOKEN_ID,
+    transferAdapter: adapter,
+  })
+}
+
+export async function autoFundQuotedHyperbeamLedger(
+  options: { signedBytes: number } & HyperbeamBundlerAutoFundOptions,
+): Promise<FundingResult> {
+  const profile = await discoverHyperbeamAoBundlerProfile({
+    ledgerId: options.ledgerId,
+    nodeUrl: options.uploader,
+    tokenId: options.tokenId,
+  })
+  const client = new HyperbalanceClient({ nodeUrl: options.uploader })
+  let { ledgerId } = options
+  let { minimumBalance } = options
+  let { tokenId } = options
+
+  if (minimumBalance === undefined) {
+    const quote = await client.quoteAuto({
+      action: options.quoteAction ?? 'hyperbeam-upload',
+      params: { bytes: options.signedBytes },
+      profile,
+    })
+    minimumBalance = quote.amount
+    ledgerId ??= quote.ledgerId
+    tokenId ??= quote.tokenId
+  }
+
+  return ensureHyperbeamCredit(
+    {
+      aoPollMs: options.aoPollMs,
+      aoStateUrl: options.aoStateUrl,
+      aoTimeoutMs: options.aoTimeoutMs,
+      deployKey: options.deployKey,
+      ledgerId,
+      minimumBalance,
+      tokenId,
+      uploader: options.uploader,
+    },
+    profile,
+  )
+}
+
 export function hyperbeamBundlerLink(uploader: string, id: string): string {
   const normalizedBase = uploader.endsWith('/') ? uploader : `${uploader}/`
   return new URL(`~arweave@2.9/raw=${encodeURIComponent(id)}`, normalizedBase).toString()
@@ -99,15 +246,19 @@ function responseId(headers: Headers, body: string): string | undefined {
 }
 
 export class HyperbeamBundlerClient implements UploadClient {
+  private readonly autoFund?: HyperbeamBundlerAutoFundOptions
   private readonly signer: unknown
+  private readonly uploader: string
   private readonly uploadUrl: string
 
-  constructor({ deployKey, uploadPath, uploader }: HyperbeamBundlerOptions) {
+  constructor({ autoFund, deployKey, uploadPath, uploader }: HyperbeamBundlerOptions) {
     const jwk = JSON.parse(Buffer.from(deployKey, 'base64').toString('utf8')) as Record<
       string,
       unknown
     >
+    this.autoFund = autoFund
     this.signer = new ArweaveSigner(jwk)
+    this.uploader = uploader
     this.uploadUrl = normalizeUploadUrl(uploader, uploadPath)
   }
 
@@ -124,6 +275,14 @@ export class HyperbeamBundlerClient implements UploadClient {
 
     const raw = Buffer.from(item.getRaw())
     const localId = item.id || toBase64Url(new DataItem(raw).id)
+
+    if (this.autoFund) {
+      await autoFundQuotedHyperbeamLedger({
+        ...this.autoFund,
+        signedBytes: raw.length,
+      })
+    }
+
     const res = await fetch(this.uploadUrl, {
       body: raw,
       headers: {
@@ -136,11 +295,54 @@ export class HyperbeamBundlerClient implements UploadClient {
 
     if (!res.ok) {
       const preview = body.replaceAll(/\s+/g, ' ').trim().slice(0, 300)
+      const paymentHint = res.status === 402 ? await this.paymentHint() : undefined
       throw new Error(
-        `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+        [
+          `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+          paymentHint,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       )
     }
 
     return { id: responseId(res.headers, body) || localId }
   }
+
+  private async paymentHint(): Promise<string | undefined> {
+    try {
+      return hyperbeamAoFundingHint(
+        await discoverHyperbeamAoBundlerProfile({ nodeUrl: this.uploader }),
+      )
+    } catch {
+      return undefined
+    }
+  }
+}
+
+export function hyperbeamAoFundingHint(profile: HyperbalanceProfile): string | undefined {
+  const lines = profile.tokens
+    .map((token) => {
+      const depositAddress = token.depositAddress ?? profile.node?.operator
+      if (!depositAddress) return
+
+      const label = token.ticker ? `${token.ticker} (${token.id})` : token.id
+      const ledger = token.ledgerId
+        ? profile.ledgers.find((candidate) => candidate.id === token.ledgerId)
+        : undefined
+      const ledgerInfo = ledger
+        ? ` Local ledger: ${ledger.id}${ledger.route ? ` at ${ledger.route}` : ''}.`
+        : ''
+
+      return `- ${label}: send funds to ${depositAddress}.${ledgerInfo}`
+    })
+    .filter(Boolean)
+
+  if (lines.length === 0) return undefined
+
+  return [
+    'The HyperBEAM node requires AO in its local ledger:',
+    ...lines,
+    'Use --hyperbeam-auto-fund to transfer AO and import the credit automatically before upload.',
+  ].join('\n')
 }

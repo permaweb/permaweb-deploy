@@ -13,7 +13,12 @@ import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
 import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
-import { HyperbeamBundlerClient, type UploadClient } from '../utils/hyperbeam-uploader.js'
+import {
+  type HyperbeamBundlerAutoFundOptions,
+  HyperbeamBundlerClient,
+  parseHyperbeamFundAmount,
+  type UploadClient,
+} from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
 import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
@@ -22,6 +27,11 @@ export interface UploadWorkflowConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
+  'hyperbeam-ao-state-url'?: string
+  'hyperbeam-auto-fund'?: boolean
+  'hyperbeam-fund-amount'?: string
+  'hyperbeam-ledger-id'?: string
+  'hyperbeam-token-id'?: string
   'hyperbeam-upload-path'?: string
   'max-token-amount'?: string
   'on-demand'?: string
@@ -79,8 +89,23 @@ export async function runUploadWorkflow(
       io.error('HyperBEAM uploads do not support Turbo --on-demand payments')
     }
 
+    let autoFund: HyperbeamBundlerAutoFundOptions | undefined
+    if (config['hyperbeam-auto-fund']) {
+      autoFund = {
+        deployKey,
+        uploader: config.uploader,
+      }
+      if (config['hyperbeam-ao-state-url']) autoFund.aoStateUrl = config['hyperbeam-ao-state-url']
+      if (config['hyperbeam-ledger-id']) autoFund.ledgerId = config['hyperbeam-ledger-id']
+      if (config['hyperbeam-token-id']) autoFund.tokenId = config['hyperbeam-token-id']
+      if (config['hyperbeam-fund-amount']) {
+        autoFund.minimumBalance = parseHyperbeamFundAmount(config['hyperbeam-fund-amount'])
+      }
+    }
+
     spinner.start('Initializing HyperBEAM bundler')
     uploadClient = new HyperbeamBundlerClient({
+      autoFund,
       deployKey,
       uploadPath: config['hyperbeam-upload-path'] ?? '/~bundler@1.0/item?codec-device=ans104@1.0',
       uploader: config.uploader,
@@ -214,6 +239,7 @@ export async function runUploadWorkflow(
       let cache = config['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
       const uploadResult: FolderUploadResult = await uploadFolder(uploadClient, folderPath, {
         cache,
+        concurrency: config['hyperbeam-auto-fund'] ? 1 : undefined,
         fundingMode,
         throwOnFailure: true,
       })

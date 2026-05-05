@@ -6,11 +6,11 @@ import { Readable } from 'node:stream'
 import { createDataItemSigner, message as aoMessage } from '@permaweb/aoconnect'
 import {
   AoTokenTransferAdapter,
-  discoverPaymentProfile,
+  DEFAULT_AO_TOKEN_ID,
+  discoverHyperbeamAoBundlerProfile,
   type FundingResult,
   HyperbalanceClient,
   type HyperbalanceProfile,
-  MissingDiscoveryError,
   waitForAoAssignmentSlot,
 } from 'hyperbalance'
 
@@ -134,6 +134,19 @@ export function parseHyperbeamFundAmount(value: string): bigint {
 export async function autoFundHyperbeamLedger(
   options: HyperbeamAutoFundOptions,
 ): Promise<FundingResult> {
+  const profile = await discoverHyperbeamAoBundlerProfile({
+    ledgerId: options.ledgerId,
+    nodeUrl: options.uploader,
+    tokenId: options.tokenId,
+  })
+
+  return ensureHyperbeamCredit(options, profile)
+}
+
+async function ensureHyperbeamCredit(
+  options: HyperbeamAutoFundOptions,
+  profile: HyperbalanceProfile,
+): Promise<FundingResult> {
   const jwk = JSON.parse(Buffer.from(options.deployKey, 'base64').toString('utf8')) as Record<
     string,
     unknown
@@ -167,8 +180,9 @@ export async function autoFundHyperbeamLedger(
   return client.ensureCreditAuto({
     ledgerId: options.ledgerId,
     minimumBalance: options.minimumBalance,
+    profile,
     recipient,
-    tokenId: options.tokenId,
+    tokenId: options.tokenId ?? DEFAULT_AO_TOKEN_ID,
     transferAdapter: adapter,
   })
 }
@@ -176,6 +190,11 @@ export async function autoFundHyperbeamLedger(
 export async function autoFundQuotedHyperbeamLedger(
   options: { signedBytes: number } & HyperbeamBundlerAutoFundOptions,
 ): Promise<FundingResult> {
+  const profile = await discoverHyperbeamAoBundlerProfile({
+    ledgerId: options.ledgerId,
+    nodeUrl: options.uploader,
+    tokenId: options.tokenId,
+  })
   const client = new HyperbalanceClient({ nodeUrl: options.uploader })
   let { ledgerId } = options
   let { minimumBalance } = options
@@ -185,22 +204,26 @@ export async function autoFundQuotedHyperbeamLedger(
     const quote = await client.quoteAuto({
       action: options.quoteAction ?? 'hyperbeam-upload',
       params: { bytes: options.signedBytes },
+      profile,
     })
     minimumBalance = quote.amount
     ledgerId ??= quote.ledgerId
     tokenId ??= quote.tokenId
   }
 
-  return autoFundHyperbeamLedger({
-    aoPollMs: options.aoPollMs,
-    aoStateUrl: options.aoStateUrl,
-    aoTimeoutMs: options.aoTimeoutMs,
-    deployKey: options.deployKey,
-    ledgerId,
-    minimumBalance,
-    tokenId,
-    uploader: options.uploader,
-  })
+  return ensureHyperbeamCredit(
+    {
+      aoPollMs: options.aoPollMs,
+      aoStateUrl: options.aoStateUrl,
+      aoTimeoutMs: options.aoTimeoutMs,
+      deployKey: options.deployKey,
+      ledgerId,
+      minimumBalance,
+      tokenId,
+      uploader: options.uploader,
+    },
+    profile,
+  )
 }
 
 export function hyperbeamBundlerLink(uploader: string, id: string): string {
@@ -288,18 +311,16 @@ export class HyperbeamBundlerClient implements UploadClient {
 
   private async paymentHint(): Promise<string | undefined> {
     try {
-      return hyperbalanceFundingHint(await discoverPaymentProfile(this.uploader))
-    } catch (error) {
-      if (error instanceof MissingDiscoveryError) {
-        return undefined
-      }
-
+      return hyperbeamAoFundingHint(
+        await discoverHyperbeamAoBundlerProfile({ nodeUrl: this.uploader }),
+      )
+    } catch {
       return undefined
     }
   }
 }
 
-export function hyperbalanceFundingHint(profile: HyperbalanceProfile): string | undefined {
+export function hyperbeamAoFundingHint(profile: HyperbalanceProfile): string | undefined {
   const lines = profile.tokens
     .map((token) => {
       const depositAddress = token.depositAddress ?? profile.node?.operator
@@ -320,8 +341,8 @@ export function hyperbalanceFundingHint(profile: HyperbalanceProfile): string | 
   if (lines.length === 0) return undefined
 
   return [
-    'The HyperBEAM node advertised hyperbalance funding metadata:',
+    'The HyperBEAM node requires AO in its local ledger:',
     ...lines,
-    'Set the local ledger recipient to the uploader wallet address when the token flow supports it.',
+    'Use --hyperbeam-auto-fund to transfer AO and import the credit automatically before upload.',
   ].join('\n')
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  hyperbalanceFundingHint,
+  hyperbeamAoFundingHint,
   hyperbeamBundlerLink,
   parseHyperbeamFundAmount,
 } from '../hyperbeam-uploader.js'
@@ -20,10 +20,10 @@ describe('hyperbeamBundlerLink', () => {
   })
 })
 
-describe('hyperbalanceFundingHint', () => {
-  it('formats generic token and ledger discovery metadata', () => {
+describe('hyperbeamAoFundingHint', () => {
+  it('formats AO token and ledger payment metadata', () => {
     expect(
-      hyperbalanceFundingHint({
+      hyperbeamAoFundingHint({
         ledgers: [
           {
             balancePath: '/ledger~process@1.0/now/balance/{address}',

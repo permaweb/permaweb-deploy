@@ -116,15 +116,13 @@ export const globalFlags = {
   }),
   hyperbeamLedgerId: createFlagConfig<string | undefined>({
     flag: Flags.string({
-      description:
-        'Hyperbalance ledger ID to fund. Defaults to the first matching advertised ledger.',
+      description: 'Advanced: local HyperBEAM ledger ID to use for AO auto-funding.',
       required: false,
     }),
   }),
   hyperbeamTokenId: createFlagConfig<string | undefined>({
     flag: Flags.string({
-      description:
-        'Hyperbalance token ID to fund. Defaults to the first matching advertised token.',
+      description: 'Advanced: AO token process ID to use for HyperBEAM auto-funding.',
       required: false,
     }),
   }),

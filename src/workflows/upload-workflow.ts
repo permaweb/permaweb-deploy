@@ -13,7 +13,12 @@ import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
 import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
-import { HyperbeamBundlerClient, type UploadClient } from '../utils/hyperbeam-uploader.js'
+import {
+  autoFundHyperbeamLedger,
+  HyperbeamBundlerClient,
+  parseHyperbeamFundAmount,
+  type UploadClient,
+} from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
 import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
@@ -22,6 +27,11 @@ export interface UploadWorkflowConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
+  'hyperbeam-ao-state-url'?: string
+  'hyperbeam-auto-fund'?: boolean
+  'hyperbeam-fund-amount'?: string
+  'hyperbeam-ledger-id'?: string
+  'hyperbeam-token-id'?: string
   'hyperbeam-upload-path'?: string
   'max-token-amount'?: string
   'on-demand'?: string
@@ -77,6 +87,27 @@ export async function runUploadWorkflow(
 
     if (config['on-demand']) {
       io.error('HyperBEAM uploads do not support Turbo --on-demand payments')
+    }
+
+    if (config['hyperbeam-auto-fund']) {
+      if (!config['hyperbeam-fund-amount']) {
+        io.error('HyperBEAM auto-fund requires --hyperbeam-fund-amount <base-units>')
+      }
+
+      spinner.start('Funding HyperBEAM local ledger')
+      const funding = await autoFundHyperbeamLedger({
+        aoStateUrl: config['hyperbeam-ao-state-url'],
+        deployKey,
+        ledgerId: config['hyperbeam-ledger-id'],
+        minimumBalance: parseHyperbeamFundAmount(config['hyperbeam-fund-amount']),
+        tokenId: config['hyperbeam-token-id'],
+        uploader: config.uploader,
+      })
+      spinner.succeed(
+        funding.shortfall === 0n
+          ? 'HyperBEAM local ledger already funded'
+          : `HyperBEAM local ledger funded (${funding.shortfall.toString()} base units)`,
+      )
     }
 
     spinner.start('Initializing HyperBEAM bundler')

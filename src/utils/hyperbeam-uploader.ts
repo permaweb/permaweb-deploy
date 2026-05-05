@@ -1,11 +1,17 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import { Readable } from 'node:stream'
 
+import { createDataItemSigner, message as aoMessage } from '@permaweb/aoconnect'
 import {
+  AoTokenTransferAdapter,
   discoverPaymentProfile,
+  type FundingResult,
+  HyperbalanceClient,
   type HyperbalanceProfile,
   MissingDiscoveryError,
+  waitForAoAssignmentSlot,
 } from 'hyperbalance'
 
 const require = createRequire(import.meta.url)
@@ -38,6 +44,17 @@ export interface UploadClient {
 export interface HyperbeamBundlerOptions {
   deployKey: string
   uploadPath: string
+  uploader: string
+}
+
+export interface HyperbeamAutoFundOptions {
+  aoPollMs?: number
+  aoStateUrl?: string
+  aoTimeoutMs?: number
+  deployKey: string
+  ledgerId?: string
+  minimumBalance: bigint
+  tokenId?: string
   uploader: string
 }
 
@@ -83,6 +100,64 @@ function normalizeUploadUrl(base: string, uploadPath: string): string {
   const normalizedBase = base.endsWith('/') ? base : `${base}/`
   const cleanPath = uploadPath.startsWith('/') ? uploadPath.slice(1) : uploadPath
   return new URL(cleanPath, normalizedBase).toString()
+}
+
+function arweaveAddressFromJwk(jwk: Record<string, unknown>): string {
+  if (typeof jwk.n !== 'string') {
+    throw new TypeError('Arweave JWK is missing modulus field "n"')
+  }
+
+  return createHash('sha256').update(Buffer.from(jwk.n, 'base64url')).digest('base64url')
+}
+
+export function parseHyperbeamFundAmount(value: string): bigint {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error('--hyperbeam-fund-amount must be a positive integer in token base units')
+  }
+
+  return BigInt(value)
+}
+
+export async function autoFundHyperbeamLedger(
+  options: HyperbeamAutoFundOptions,
+): Promise<FundingResult> {
+  const jwk = JSON.parse(Buffer.from(options.deployKey, 'base64').toString('utf8')) as Record<
+    string,
+    unknown
+  >
+  const recipient = arweaveAddressFromJwk(jwk)
+  const signer = createDataItemSigner(jwk)
+  const client = new HyperbalanceClient({ nodeUrl: options.uploader })
+  const adapter = new AoTokenTransferAdapter({
+    async inferSender() {
+      return recipient
+    },
+    async message(input) {
+      return aoMessage({
+        data: input.data ?? '',
+        process: input.process,
+        signer,
+        tags: input.tags,
+      })
+    },
+    async waitForAssignmentSlot(messageId, context) {
+      return waitForAoAssignmentSlot({
+        messageId,
+        pollMs: options.aoPollMs,
+        processId: context.processId,
+        stateUrl: options.aoStateUrl,
+        timeoutMs: options.aoTimeoutMs,
+      })
+    },
+  })
+
+  return client.ensureCreditAuto({
+    ledgerId: options.ledgerId,
+    minimumBalance: options.minimumBalance,
+    recipient,
+    tokenId: options.tokenId,
+    transferAdapter: adapter,
+  })
 }
 
 export function hyperbeamBundlerLink(uploader: string, id: string): string {

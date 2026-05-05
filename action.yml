@@ -52,6 +52,23 @@ inputs:
     description: 'HyperBEAM bundler route used when uploader-type is hyperbeam'
     required: false
     default: '/~bundler@1.0/item?codec-device=ans104@1.0'
+  hyperbeam-auto-fund:
+    description: 'Automatically fund the HyperBEAM local ledger before upload'
+    required: false
+    default: 'false'
+  hyperbeam-fund-amount:
+    description: 'Minimum HyperBEAM local ledger balance to ensure before upload, in token base units'
+    required: false
+  hyperbeam-token-id:
+    description: 'Hyperbalance token ID to fund when the node advertises multiple tokens'
+    required: false
+  hyperbeam-ledger-id:
+    description: 'Hyperbalance ledger ID to fund when the node advertises multiple ledgers'
+    required: false
+  hyperbeam-ao-state-url:
+    description: 'AO state endpoint used while waiting for HyperBEAM auto-fund transfer assignment'
+    required: false
+    default: 'https://state.forward.computer'
   preview:
     description: 'Enable preview mode: auto-generates undername from PR number and posts a comment with the preview URL'
     required: false
@@ -192,6 +209,21 @@ runs:
         fi
         if [[ "${{ inputs.uploader-type }}" == "hyperbeam" ]]; then
           ARGS="$ARGS --hyperbeam-upload-path ${{ inputs.hyperbeam-upload-path }}"
+          if [[ "${{ inputs.hyperbeam-auto-fund }}" == "true" ]]; then
+            ARGS="$ARGS --hyperbeam-auto-fund"
+          fi
+          if [[ -n "${{ inputs.hyperbeam-fund-amount }}" ]]; then
+            ARGS="$ARGS --hyperbeam-fund-amount ${{ inputs.hyperbeam-fund-amount }}"
+          fi
+          if [[ -n "${{ inputs.hyperbeam-token-id }}" ]]; then
+            ARGS="$ARGS --hyperbeam-token-id ${{ inputs.hyperbeam-token-id }}"
+          fi
+          if [[ -n "${{ inputs.hyperbeam-ledger-id }}" ]]; then
+            ARGS="$ARGS --hyperbeam-ledger-id ${{ inputs.hyperbeam-ledger-id }}"
+          fi
+          if [[ -n "${{ inputs.hyperbeam-ao-state-url }}" ]]; then
+            ARGS="$ARGS --hyperbeam-ao-state-url ${{ inputs.hyperbeam-ao-state-url }}"
+          fi
         fi
 
         # Add dedupe options

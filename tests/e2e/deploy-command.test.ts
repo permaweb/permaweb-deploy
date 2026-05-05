@@ -196,6 +196,25 @@ describe(
         expect(error?.message).toMatch(/require --uploader/)
       })
 
+      it('should require a funding amount when HyperBEAM auto-fund is enabled', async () => {
+        const { error } = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
+          '--no-dedupe',
+        ])
+
+        expect(error).toBeDefined()
+        expect(error?.message).toMatch(/requires --hyperbeam-fund-amount/)
+      })
+
       it('should include hyperbalance funding metadata when a HyperBEAM upload needs payment', async () => {
         server.use(
           http.get('https://hyperbeam.test/.well-known/hyperbalance', () =>

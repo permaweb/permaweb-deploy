@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { hyperbalanceFundingHint, hyperbeamBundlerLink } from '../hyperbeam-uploader.js'
+import {
+  hyperbalanceFundingHint,
+  hyperbeamBundlerLink,
+  parseHyperbeamFundAmount,
+} from '../hyperbeam-uploader.js'
 
 describe('hyperbeamBundlerLink', () => {
   it('builds a direct HyperBEAM raw resolver URL', () => {
@@ -39,5 +43,17 @@ describe('hyperbalanceFundingHint', () => {
         version: 'hyperbalance@0.1',
       }),
     ).toContain('AO (ao-mainnet): send funds to node-operator')
+  })
+})
+
+describe('parseHyperbeamFundAmount', () => {
+  it('accepts positive token base-unit amounts', () => {
+    expect(parseHyperbeamFundAmount('1000000000000')).toBe(1_000_000_000_000n)
+  })
+
+  it('rejects zero, negative, decimal, and non-numeric amounts', () => {
+    for (const value of ['0', '-1', '1.5', 'AO']) {
+      expect(() => parseHyperbeamFundAmount(value)).toThrow(/positive integer/)
+    }
   })
 })

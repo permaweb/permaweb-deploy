@@ -54,6 +54,7 @@
   "dependencies": {
     "@ar.io/sdk": "^3.22.1",
     "@ardrive/turbo-sdk": "^1.39.1",
+    "@dha-team/arbundles": "^1.0.4",
     "@inquirer/prompts": "^7.2.0",
     "@oclif/core": "^4.0.30",
     "@permaweb/aoconnect": "^0.0.85",

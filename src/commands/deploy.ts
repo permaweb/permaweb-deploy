@@ -14,6 +14,7 @@ import { promptAdvancedOptions } from '../prompts/arns.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
+import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
@@ -33,6 +34,7 @@ export default class Deploy extends Command {
     '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --private-key "0x..."',
     '<%= config.bin %> deploy --arns-name my-app --on-demand ario --max-token-amount 1000',
     '<%= config.bin %> deploy --arns-name my-app --uploader https://up.arweave.net',
+    '<%= config.bin %> deploy --arns-name my-app --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
     '<%= config.bin %> upload --wallet ./wallet.json  # Upload only (no ArNS update)',
   ]
 
@@ -90,6 +92,7 @@ export default class Deploy extends Command {
         'dedupe-cache-max-entries': effectiveCacheMaxEntries,
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
+        'hyperbeam-upload-path': baseConfig['hyperbeam-upload-path'],
         'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
         'no-dedupe': baseConfig['no-dedupe'],
         'on-demand': advancedOptions?.onDemand || baseConfig['on-demand'],
@@ -98,6 +101,7 @@ export default class Deploy extends Command {
         'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
         undername: advancedOptions?.undername || baseConfig.undername,
         uploader: baseConfig.uploader,
+        'uploader-type': baseConfig['uploader-type'],
         wallet: walletConfig.wallet,
       }
 
@@ -201,12 +205,21 @@ export default class Deploy extends Command {
         spinner.succeed('ANT record updated')
 
         const isCI = Boolean(process.env.CI)
+        const bundlerLink =
+          deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
+            ? hyperbeamBundlerLink(deployConfig.uploader, txOrManifestId)
+            : undefined
 
         if (isCI) {
           this.log('Deployment Successful!')
           this.log('Tx ID: ' + txOrManifestId)
           if (deployConfig.uploader) {
             this.log('Bundler service: ' + deployConfig.uploader)
+            this.log('Uploader type: ' + deployConfig['uploader-type'])
+          }
+
+          if (bundlerLink) {
+            this.log('Bundler link: ' + bundlerLink)
           }
 
           this.log('ArNS Name: ' + deployConfig['arns-name'])
@@ -226,7 +239,13 @@ export default class Deploy extends Command {
           table.push(
             ['Tx ID', chalk.green(txOrManifestId)],
             ...(deployConfig.uploader
-              ? ([['Bundler service', chalk.cyan(deployConfig.uploader)]] as [string, string][])
+              ? ([
+                  ['Bundler service', chalk.cyan(deployConfig.uploader)],
+                  ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
+                ] as [string, string][])
+              : []),
+            ...(bundlerLink
+              ? ([['Bundler link', chalk.yellow(bundlerLink)]] as [string, string][])
               : []),
             ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
             ['Undername', chalk.yellow(deployConfig.undername)],

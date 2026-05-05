@@ -189,14 +189,14 @@ permaweb-deploy deploy --arns-name my-app --sig-type ethereum --private-key "0x.
 
 ### Bundler service
 
-Uploads go through a [Turbo](https://docs.ardrive.io/docs/turbo/) **bundler service** (HTTP API that bundles data for Arweave). By default, permaweb-deploy uses ArDrive’s production bundler (`https://upload.ardrive.io`). **`--uploader`** sets the **base URL** of the bundler service to use (scheme + host; typically no path).
+Uploads go through a bundler service that accepts signed data items and posts them to Arweave. By default, permaweb-deploy uses the [Turbo](https://docs.ardrive.io/docs/turbo/) API and ArDrive’s production bundler (`https://upload.ardrive.io`). **`--uploader`** sets the **base URL** of the bundler service to use (scheme + host; typically no path).
 
-| When to use               | Example value                                                 |
-| ------------------------- | ------------------------------------------------------------- |
-| **Default** (omit flag)   | ArDrive production bundler — same as Turbo CLI defaults       |
-| **Arweave bundler**       | `https://up.arweave.net`                                      |
-| **Development / staging** | `https://upload.ardrive.dev`                                  |
-| **Custom or self-hosted** | Your own base URL if it implements the Turbo bundler protocol |
+| When to use               | Example value                                                     |
+| ------------------------- | ----------------------------------------------------------------- |
+| **Default** (omit flag)   | ArDrive production bundler — same as Turbo CLI defaults           |
+| **Arweave bundler**       | `https://up.arweave.net`                                          |
+| **Development / staging** | `https://upload.ardrive.dev`                                      |
+| **Custom or self-hosted** | Your own base URL if it implements the selected uploader protocol |
 
 **Examples:**
 
@@ -207,10 +207,28 @@ permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --uploader http
 permaweb-deploy upload --wallet ./wallet.json --deploy-folder ./dist --uploader https://up.arweave.net
 ```
 
+To upload through a HyperBEAM bundler, set `--uploader-type hyperbeam` and pass the node URL:
+
+```bash
+permaweb-deploy upload \
+  --wallet ./wallet.json \
+  --deploy-folder ./dist \
+  --uploader-type hyperbeam \
+  --uploader https://hyperbeam.example.com
+
+permaweb-deploy deploy \
+  --arns-name my-app \
+  --wallet ./wallet.json \
+  --deploy-folder ./dist \
+  --uploader-type hyperbeam \
+  --uploader https://hyperbeam.example.com
+```
+
 **Notes:**
 
-- Billing and signer behavior still follow Turbo; if an alternate bundler has different rules, check that provider’s docs.
-- Use a **base URL only** (e.g. `https://up.arweave.net`), not a path to a specific file or route.
+- Turbo billing and signer behavior follow Turbo.
+- HyperBEAM uploads require an Arweave JWK signer. If the node requires payment, the node handles that flow. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
+- Use a **base URL only** (e.g. `https://up.arweave.net` or `https://hyperbeam.example.com`), not a path to a specific file or route.
 
 ### Command Options
 
@@ -229,9 +247,11 @@ permaweb-deploy upload --wallet ./wallet.json --deploy-folder ./dist --uploader 
 - `--max-token-amount`: Maximum token amount for on-demand payment (used with `--on-demand`)
 - `--no-dedupe`: Disable deduplication (do not cache or reuse previous uploads)
 - `--dedupe-cache-max-entries`: Maximum number of entries to keep in the dedupe cache (LRU). Default: `10000`
-- `--uploader`: Base URL of the Turbo **bundler service** to use (default: `https://upload.ardrive.io`). See [Bundler service](#bundler-service) above.
+- `--uploader`: Base URL of the bundler service to use. See [Bundler service](#bundler-service) above.
+- `--uploader-type`: Upload protocol to use (`turbo` or `hyperbeam`). Default: `turbo`
+- `--hyperbeam-upload-path`: HyperBEAM bundler route. Default: `/~bundler@1.0/item?codec-device=ans104@1.0`
 
-**`upload`** (no ArNS): accepts `--deploy-folder`, `--deploy-file`, wallet/signer flags, `--uploader`, `--on-demand` / `--max-token-amount`, and dedupe flags only.
+**`upload`** (no ArNS): accepts `--deploy-folder`, `--deploy-file`, wallet/signer flags, uploader flags, `--on-demand` / `--max-token-amount`, and dedupe flags only.
 
 ### Deduplication
 
@@ -403,6 +423,19 @@ jobs:
     deploy-folder: ./dist
     on-demand: ario
     max-token-amount: '2.0'
+```
+
+### With HyperBEAM
+
+```yaml
+- name: Deploy through a HyperBEAM bundler
+  uses: permaweb/permaweb-deploy@v1
+  with:
+    deploy-key: ${{ secrets.DEPLOY_KEY }}
+    arns-name: myapp
+    deploy-folder: ./dist
+    uploader-type: hyperbeam
+    uploader: https://hyperbeam.example.com
 ```
 
 ### Disabling Deduplication

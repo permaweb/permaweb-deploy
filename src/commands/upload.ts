@@ -9,6 +9,7 @@ import Table from 'cli-table3'
 import { type UploadConfig, uploadFlagConfigs } from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
+import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 
@@ -23,6 +24,7 @@ export default class Upload extends Command {
     '<%= config.bin %> upload --wallet ./wallet.json --deploy-file ./dist/index.html',
     '<%= config.bin %> upload --private-key "$(cat wallet.json)" --on-demand ario --max-token-amount 1.5',
     '<%= config.bin %> upload --wallet ./wallet.json --uploader https://up.arweave.net',
+    '<%= config.bin %> upload --wallet ./wallet.json --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
   ]
 
   static override flags = extractFlags(uploadFlagConfigs)
@@ -62,10 +64,12 @@ export default class Upload extends Command {
         'dedupe-cache-max-entries': effectiveCacheMaxEntries,
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
+        'hyperbeam-upload-path': baseConfig['hyperbeam-upload-path'],
         'max-token-amount': baseConfig['max-token-amount'],
         'on-demand': baseConfig['on-demand'],
         'sig-type': baseConfig['sig-type'],
         uploader: baseConfig.uploader,
+        'uploader-type': baseConfig['uploader-type'],
       }
 
       if (interactive) {
@@ -109,12 +113,21 @@ export default class Upload extends Command {
         this.log('')
 
         const isCI = Boolean(process.env.CI)
+        const bundlerLink =
+          uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
+            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId)
+            : undefined
 
         if (isCI) {
           this.log('Upload successful!')
           this.log('Tx ID: ' + txOrManifestId)
           if (uploadCfg.uploader) {
             this.log('Bundler service: ' + uploadCfg.uploader)
+            this.log('Uploader type: ' + uploadCfg['uploader-type'])
+          }
+
+          if (bundlerLink) {
+            this.log('Bundler link: ' + bundlerLink)
           }
 
           this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
@@ -127,7 +140,14 @@ export default class Upload extends Command {
           table.push(['Tx ID', chalk.green(txOrManifestId)])
 
           if (uploadCfg.uploader) {
-            table.push(['Bundler service', chalk.cyan(uploadCfg.uploader)])
+            table.push(
+              ['Bundler service', chalk.cyan(uploadCfg.uploader)],
+              ['Uploader type', chalk.cyan(uploadCfg['uploader-type'])],
+            )
+          }
+
+          if (bundlerLink) {
+            table.push(['Bundler link', chalk.yellow(bundlerLink)])
           }
 
           table.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])

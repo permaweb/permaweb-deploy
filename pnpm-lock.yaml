@@ -14,6 +14,9 @@ importers:
       '@ardrive/turbo-sdk':
         specifier: ^1.39.1
         version: 1.41.0(@solana/sysvars@5.5.1(typescript@5.9.3))(@tanstack/query-core@5.95.2)(@tanstack/react-query@5.95.2(react@18.3.1))(bufferutil@4.1.0)(react@18.3.1)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@dha-team/arbundles':
+        specifier: ^1.0.4
+        version: 1.0.4(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@inquirer/prompts':
         specifier: ^7.2.0
         version: 7.10.1(@types/node@22.19.15)
@@ -7139,7 +7142,7 @@ snapshots:
       '@ethersproject/address': 5.8.0
       '@ethersproject/base64': 5.8.0
       '@ethersproject/bignumber': 5.8.0
-      '@ethersproject/bytes': 5.7.0
+      '@ethersproject/bytes': 5.8.0
       '@ethersproject/keccak256': 5.8.0
       '@ethersproject/logger': 5.8.0
       '@ethersproject/properties': 5.8.0
@@ -7216,9 +7219,9 @@ snapshots:
       '@ethersproject/base64': 5.8.0
       '@ethersproject/basex': 5.8.0
       '@ethersproject/bignumber': 5.8.0
-      '@ethersproject/bytes': 5.7.0
+      '@ethersproject/bytes': 5.8.0
       '@ethersproject/constants': 5.8.0
-      '@ethersproject/hash': 5.7.0
+      '@ethersproject/hash': 5.8.0
       '@ethersproject/logger': 5.8.0
       '@ethersproject/networks': 5.8.0
       '@ethersproject/properties': 5.8.0
@@ -7226,7 +7229,7 @@ snapshots:
       '@ethersproject/rlp': 5.8.0
       '@ethersproject/sha2': 5.8.0
       '@ethersproject/strings': 5.8.0
-      '@ethersproject/transactions': 5.7.0
+      '@ethersproject/transactions': 5.8.0
       '@ethersproject/web': 5.8.0
       bech32: 1.1.4
       ws: 7.4.6(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -7278,7 +7281,7 @@ snapshots:
 
   '@ethersproject/signing-key@5.7.0':
     dependencies:
-      '@ethersproject/bytes': 5.7.0
+      '@ethersproject/bytes': 5.8.0
       '@ethersproject/logger': 5.8.0
       '@ethersproject/properties': 5.8.0
       bn.js: 5.2.3
@@ -7304,13 +7307,13 @@ snapshots:
     dependencies:
       '@ethersproject/address': 5.8.0
       '@ethersproject/bignumber': 5.8.0
-      '@ethersproject/bytes': 5.7.0
+      '@ethersproject/bytes': 5.8.0
       '@ethersproject/constants': 5.8.0
       '@ethersproject/keccak256': 5.8.0
       '@ethersproject/logger': 5.8.0
       '@ethersproject/properties': 5.8.0
       '@ethersproject/rlp': 5.8.0
-      '@ethersproject/signing-key': 5.7.0
+      '@ethersproject/signing-key': 5.8.0
 
   '@ethersproject/transactions@5.8.0':
     dependencies:
@@ -7330,16 +7333,16 @@ snapshots:
       '@ethersproject/abstract-signer': 5.8.0
       '@ethersproject/address': 5.8.0
       '@ethersproject/bignumber': 5.8.0
-      '@ethersproject/bytes': 5.7.0
-      '@ethersproject/hash': 5.7.0
+      '@ethersproject/bytes': 5.8.0
+      '@ethersproject/hash': 5.8.0
       '@ethersproject/hdnode': 5.8.0
       '@ethersproject/json-wallets': 5.8.0
       '@ethersproject/keccak256': 5.8.0
       '@ethersproject/logger': 5.8.0
       '@ethersproject/properties': 5.8.0
       '@ethersproject/random': 5.8.0
-      '@ethersproject/signing-key': 5.7.0
-      '@ethersproject/transactions': 5.7.0
+      '@ethersproject/signing-key': 5.8.0
+      '@ethersproject/transactions': 5.8.0
       '@ethersproject/wordlists': 5.8.0
 
   '@ethersproject/wallet@5.8.0':
@@ -10142,7 +10145,7 @@ snapshots:
 
   arconnect@0.4.2:
     dependencies:
-      arweave: 1.15.5
+      arweave: 1.15.7
 
   argparse@1.0.10:
     dependencies:
@@ -13713,7 +13716,7 @@ snapshots:
 
   warp-arbundles@1.0.4:
     dependencies:
-      arweave: 1.15.5
+      arweave: 1.15.7
       base64url: 3.0.1
       buffer: 6.0.3
       warp-isomorphic: 1.0.7

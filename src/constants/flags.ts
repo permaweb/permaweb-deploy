@@ -94,6 +94,13 @@ export const globalFlags = {
       return target.type === 'folder' ? target.path : './dist'
     },
   }),
+  hyperbeamUploadPath: createFlagConfig<string>({
+    flag: Flags.string({
+      default: '/~bundler@1.0/item?codec-device=ans104@1.0',
+      description: 'HyperBEAM bundler route used when --uploader-type hyperbeam is set.',
+      required: false,
+    }),
+  }),
   // Advanced payment settings
   maxTokenAmount: createFlagConfig<string | undefined>({
     flag: Flags.string({
@@ -168,7 +175,16 @@ export const globalFlags = {
   uploader: createFlagConfig<string | undefined>({
     flag: Flags.string({
       description:
-        'Base URL of the Turbo bundler service to use (omit for ArDrive production: https://upload.ardrive.io). Examples: https://up.arweave.net (Arweave), https://upload.ardrive.dev (dev). The host must implement the Turbo bundler protocol; path/query are not required on the URL.',
+        'Base URL of the bundler service to use. For Turbo, omit for ArDrive production: https://upload.ardrive.io. For HyperBEAM, pass the node URL, for example https://hyperbeam.example.com.',
+      required: false,
+    }),
+  }),
+  uploaderType: createFlagConfig<string>({
+    flag: Flags.string({
+      default: 'turbo',
+      description:
+        'Uploader protocol to use. turbo uses the Turbo bundler API; hyperbeam signs ANS-104 items and posts them to a HyperBEAM bundler route.',
+      options: ['turbo', 'hyperbeam'],
       required: false,
     }),
   }),
@@ -199,6 +215,7 @@ export const deployFlags = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
+  'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
   'on-demand': globalFlags.onDemand.flag,
@@ -207,6 +224,7 @@ export const deployFlags = {
   'ttl-seconds': globalFlags.ttlSeconds.flag,
   undername: globalFlags.undername.flag,
   uploader: globalFlags.uploader.flag,
+  'uploader-type': globalFlags.uploaderType.flag,
   wallet: globalFlags.wallet.flag,
 }
 
@@ -238,6 +256,7 @@ export interface DeployConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
+  'hyperbeam-upload-path': string
   'max-token-amount'?: string
   'no-dedupe': boolean
   'on-demand'?: string
@@ -246,6 +265,7 @@ export interface DeployConfig {
   'ttl-seconds': string
   undername: string
   uploader?: string
+  'uploader-type': string
   wallet?: string
 }
 
@@ -259,6 +279,7 @@ export const deployFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
@@ -267,6 +288,7 @@ export const deployFlagConfigs = {
   'ttl-seconds': globalFlags.ttlSeconds,
   undername: globalFlags.undername,
   uploader: globalFlags.uploader,
+  'uploader-type': globalFlags.uploaderType,
   wallet: globalFlags.wallet,
 } as const
 
@@ -277,12 +299,14 @@ export const uploadFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
   'sig-type': globalFlags.sigType,
   uploader: globalFlags.uploader,
+  'uploader-type': globalFlags.uploaderType,
   wallet: globalFlags.wallet,
 } as const
 

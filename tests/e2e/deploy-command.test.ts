@@ -1,4 +1,5 @@
 import { runCommand } from '@oclif/test'
+import { http, HttpResponse } from 'msw'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { TEST_ETH_PRIVATE_KEY } from '../constants.js'
@@ -140,6 +141,60 @@ describe(
       ])
 
       expect(result.error).toBeUndefined()
+    })
+
+    describe('hyperbeam uploader', () => {
+      it('should upload a file through a HyperBEAM bundler route', async () => {
+        const seenUploads: Array<{ contentType: string; size: number }> = []
+
+        server.use(
+          http.post('https://hyperbeam.test/~bundler@1.0/item', async ({ request }) => {
+            const raw = Buffer.from(await request.arrayBuffer())
+            seenUploads.push({
+              contentType: request.headers.get('content-type') || '',
+              size: raw.length,
+            })
+
+            return new HttpResponse('<html><title>HyperBEAM</title></html>', {
+              headers: { id: 'mock-hyperbeam-dataitem-id' },
+              status: 200,
+            })
+          }),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeUndefined()
+        expect(seenUploads).toHaveLength(1)
+        expect(seenUploads[0].contentType).toBe('application/octet-stream')
+        expect(seenUploads[0].size).toBeGreaterThan(0)
+      })
+
+      it('should require an uploader URL for HyperBEAM uploads', async () => {
+        const { error } = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+        ])
+
+        expect(error).toBeDefined()
+        expect(error?.message).toMatch(/require --uploader/)
+      })
     })
 
     describe('arweave signer', () => {

@@ -94,6 +94,45 @@ export const globalFlags = {
       return target.type === 'folder' ? target.path : './dist'
     },
   }),
+  hyperbeamAoStateUrl: createFlagConfig<string>({
+    flag: Flags.string({
+      default: 'https://state.forward.computer',
+      description: 'AO state endpoint used to wait for HyperBEAM auto-fund transfer assignment.',
+      required: false,
+    }),
+  }),
+  hyperbeamAutoFund: createFlagConfig<boolean>({
+    flag: Flags.boolean({
+      default: false,
+      description: 'Automatically fund the HyperBEAM local ledger before upload.',
+      required: false,
+    }),
+  }),
+  hyperbeamFundAmount: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Optional minimum HyperBEAM local ledger balance override, in token base units.',
+      required: false,
+    }),
+  }),
+  hyperbeamLedgerId: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Advanced: local HyperBEAM ledger ID to use for AO auto-funding.',
+      required: false,
+    }),
+  }),
+  hyperbeamTokenId: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Advanced: AO token process ID to use for HyperBEAM auto-funding.',
+      required: false,
+    }),
+  }),
+  hyperbeamUploadPath: createFlagConfig<string>({
+    flag: Flags.string({
+      default: '/~bundler@1.0/item?codec-device=ans104@1.0',
+      description: 'HyperBEAM bundler route used when --uploader-type hyperbeam is set.',
+      required: false,
+    }),
+  }),
   // Advanced payment settings
   maxTokenAmount: createFlagConfig<string | undefined>({
     flag: Flags.string({
@@ -168,7 +207,16 @@ export const globalFlags = {
   uploader: createFlagConfig<string | undefined>({
     flag: Flags.string({
       description:
-        'Base URL of the Turbo bundler service to use (omit for ArDrive production: https://upload.ardrive.io). Examples: https://up.arweave.net (Arweave), https://upload.ardrive.dev (dev). The host must implement the Turbo bundler protocol; path/query are not required on the URL.',
+        'Base URL of the bundler service to use. For Turbo, omit for ArDrive production: https://upload.ardrive.io. For HyperBEAM, pass the node URL, for example https://hyperbeam.example.com.',
+      required: false,
+    }),
+  }),
+  uploaderType: createFlagConfig<string>({
+    flag: Flags.string({
+      default: 'turbo',
+      description:
+        'Uploader protocol to use. turbo uses the Turbo bundler API; hyperbeam signs ANS-104 items and posts them to a HyperBEAM bundler route.',
+      options: ['turbo', 'hyperbeam'],
       required: false,
     }),
   }),
@@ -199,6 +247,12 @@ export const deployFlags = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
+  'hyperbeam-ao-state-url': globalFlags.hyperbeamAoStateUrl.flag,
+  'hyperbeam-auto-fund': globalFlags.hyperbeamAutoFund.flag,
+  'hyperbeam-fund-amount': globalFlags.hyperbeamFundAmount.flag,
+  'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId.flag,
+  'hyperbeam-token-id': globalFlags.hyperbeamTokenId.flag,
+  'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath.flag,
   'max-token-amount': globalFlags.maxTokenAmount.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
   'on-demand': globalFlags.onDemand.flag,
@@ -207,6 +261,7 @@ export const deployFlags = {
   'ttl-seconds': globalFlags.ttlSeconds.flag,
   undername: globalFlags.undername.flag,
   uploader: globalFlags.uploader.flag,
+  'uploader-type': globalFlags.uploaderType.flag,
   wallet: globalFlags.wallet.flag,
 }
 
@@ -238,6 +293,12 @@ export interface DeployConfig {
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
+  'hyperbeam-ao-state-url': string
+  'hyperbeam-auto-fund': boolean
+  'hyperbeam-fund-amount'?: string
+  'hyperbeam-ledger-id'?: string
+  'hyperbeam-token-id'?: string
+  'hyperbeam-upload-path': string
   'max-token-amount'?: string
   'no-dedupe': boolean
   'on-demand'?: string
@@ -246,6 +307,7 @@ export interface DeployConfig {
   'ttl-seconds': string
   undername: string
   uploader?: string
+  'uploader-type': string
   wallet?: string
 }
 
@@ -259,6 +321,12 @@ export const deployFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'hyperbeam-ao-state-url': globalFlags.hyperbeamAoStateUrl,
+  'hyperbeam-auto-fund': globalFlags.hyperbeamAutoFund,
+  'hyperbeam-fund-amount': globalFlags.hyperbeamFundAmount,
+  'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId,
+  'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
+  'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
@@ -267,6 +335,7 @@ export const deployFlagConfigs = {
   'ttl-seconds': globalFlags.ttlSeconds,
   undername: globalFlags.undername,
   uploader: globalFlags.uploader,
+  'uploader-type': globalFlags.uploaderType,
   wallet: globalFlags.wallet,
 } as const
 
@@ -277,12 +346,19 @@ export const uploadFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
+  'hyperbeam-ao-state-url': globalFlags.hyperbeamAoStateUrl,
+  'hyperbeam-auto-fund': globalFlags.hyperbeamAutoFund,
+  'hyperbeam-fund-amount': globalFlags.hyperbeamFundAmount,
+  'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId,
+  'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
+  'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,
   'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
   'sig-type': globalFlags.sigType,
   uploader: globalFlags.uploader,
+  'uploader-type': globalFlags.uploaderType,
   wallet: globalFlags.wallet,
 } as const
 

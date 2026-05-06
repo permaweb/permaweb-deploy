@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { Readable } from 'node:stream'
 
-import { OnDemandFunding, type TurboAuthenticatedClient } from '@ardrive/turbo-sdk'
+import { OnDemandFunding } from '@ardrive/turbo-sdk'
 import * as mime from 'mime-types'
 import pLimit from 'p-limit'
 
@@ -13,6 +13,7 @@ import {
   touchCacheEntry,
   type TransactionCache,
 } from './cache.js'
+import type { UploadClient } from './hyperbeam-uploader.js'
 
 export interface UploadResult {
   cacheHit: boolean
@@ -30,7 +31,7 @@ export interface FolderUploadResult extends UploadResult {
 }
 
 export async function uploadFile(
-  turbo: TurboAuthenticatedClient,
+  turbo: UploadClient,
   filePath: string,
   options?: {
     cache?: TransactionCache
@@ -111,9 +112,14 @@ interface FileUploadTask {
  * Upload a folder with per-file deduplication.
  * Each file is checked against the cache individually, and only uncached files are uploaded.
  * A manifest is then constructed and uploaded to create the folder structure.
+ *
+ * @param turbo - Upload client used for file and manifest uploads.
+ * @param folderPath - Folder to upload.
+ * @param options - Upload options for caching, concurrency, funding, and failure handling.
+ * @returns Folder upload result including manifest transaction ID and cache stats.
  */
 export async function uploadFolder(
-  turbo: TurboAuthenticatedClient,
+  turbo: UploadClient,
   folderPath: string,
   options?: {
     cache?: TransactionCache

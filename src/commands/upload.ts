@@ -9,9 +9,66 @@ import Table from 'cli-table3'
 import { type UploadConfig, uploadFlagConfigs } from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
+import { formatUploadCost, formatUploadSize } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
+
+function fundingDisplay(section: string): string {
+  const fundingLine = section
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('- '))
+    ?.replace(/^- /, '')
+
+  if (!fundingLine) {
+    return section
+  }
+
+  return fundingLine
+    .replace(/^AO: send funds to /, 'Sending AO to ')
+    .replace(/\. Local ledger:.*$/, '')
+}
+
+function uploadErrorTable(message: string): string {
+  const table = new Table({
+    style: { head: [] },
+  })
+  const sections = message
+    .split(/\n{2,}/)
+    .map((section) => section.trim())
+    .filter(Boolean)
+
+  for (const [index, section] of sections.entries()) {
+    if (index === 0) {
+      table.push(['Error', chalk.red(section)])
+      continue
+    }
+
+    if (section.startsWith('Required upload credit:')) {
+      table.push([
+        'Required upload credit',
+        chalk.blue(section.replace(/^Required upload credit:\s*/, '')),
+      ])
+      continue
+    }
+
+    if (section.startsWith('The HyperBEAM node requires AO')) {
+      table.push(['Funding', fundingDisplay(section)])
+      continue
+    }
+
+    table.push(['Note', section])
+  }
+
+  return boxen(`${chalk.red.bold('Upload failed')}\n\n${table.toString()}`, {
+    borderColor: 'red',
+    borderStyle: 'round',
+    padding: 1,
+    title: chalk.bold('Permaweb Deploy'),
+    titleAlignment: 'center',
+  })
+}
 
 export default class Upload extends Command {
   static override args = {}
@@ -111,9 +168,10 @@ export default class Upload extends Command {
       this.log(chalk.cyan.bold('\nStarting upload...\n'))
 
       try {
-        const txOrManifestId = await runUploadWorkflow(deployKey, uploadCfg, {
+        const uploadResult = await runUploadWorkflow(deployKey, uploadCfg, {
           error: (msg) => this.error(msg),
         })
+        const txOrManifestId = uploadResult.transactionId
 
         this.log('')
 
@@ -126,6 +184,14 @@ export default class Upload extends Command {
         if (isCI) {
           this.log('Upload successful!')
           this.log('Tx ID: ' + txOrManifestId)
+          if (uploadResult.size > 0) {
+            this.log('Upload size: ' + formatUploadSize(uploadResult.size))
+          }
+
+          if (uploadResult.cost) {
+            this.log('Upload cost: ' + formatUploadCost(uploadResult.cost))
+          }
+
           if (uploadCfg.uploader) {
             this.log('Bundler service: ' + uploadCfg.uploader)
             this.log('Uploader type: ' + uploadCfg['uploader-type'])
@@ -138,11 +204,17 @@ export default class Upload extends Command {
           this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
         } else {
           const table = new Table({
-            head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
             style: { head: [] },
           })
 
           table.push(['Tx ID', chalk.green(txOrManifestId)])
+          if (uploadResult.size > 0) {
+            table.push(['Upload size', chalk.blue(formatUploadSize(uploadResult.size))])
+          }
+
+          if (uploadResult.cost) {
+            table.push(['Upload cost', chalk.blue(formatUploadCost(uploadResult.cost))])
+          }
 
           if (uploadCfg.uploader) {
             table.push(
@@ -171,8 +243,22 @@ export default class Upload extends Command {
           this.log(`\n${successMessage}`)
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const normalizedError = errorMessage.startsWith('Upload failed:')
+          ? errorMessage.replace(/^Upload failed:\s*/, '')
+          : errorMessage
+
+        if (!process.env.CI && process.stdout.isTTY) {
+          this.log(`\n${uploadErrorTable(normalizedError)}`)
+          this.exit(1)
+        }
+
         this.error(
-          chalk.red(`Upload failed: ${error instanceof Error ? error.message : String(error)}`),
+          chalk.red(
+            errorMessage.startsWith('Upload failed:')
+              ? errorMessage
+              : `Upload failed: ${errorMessage}`,
+          ),
         )
       }
     } catch (error) {

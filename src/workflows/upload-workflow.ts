@@ -18,6 +18,8 @@ import {
   HyperbeamBundlerClient,
   parseHyperbeamFundAmount,
   type UploadClient,
+  type UploadCost,
+  type UploadSize,
 } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
@@ -57,6 +59,12 @@ export interface UploadWorkflowIo {
   error: (msg: string) => never
 }
 
+export interface UploadWorkflowResult {
+  cost?: UploadCost
+  size?: UploadSize
+  transactionId: string
+}
+
 /**
  * Sign in to Turbo and upload a file or folder.
  *
@@ -69,7 +77,7 @@ export async function runUploadWorkflow(
   deployKey: string,
   config: UploadWorkflowConfig,
   io: UploadWorkflowIo,
-): Promise<string> {
+): Promise<UploadWorkflowResult> {
   const spinner = ora()
 
   const uploaderType = config['uploader-type'] ?? 'turbo'
@@ -107,6 +115,11 @@ export async function runUploadWorkflow(
     uploadClient = new HyperbeamBundlerClient({
       autoFund,
       deployKey,
+      quote: {
+        ledgerId: config['hyperbeam-ledger-id'],
+        tokenId: config['hyperbeam-token-id'],
+        uploader: config.uploader,
+      },
       uploadPath: config['hyperbeam-upload-path'] ?? '/~bundler@1.0/item?codec-device=ans104@1.0',
       uploader: config.uploader,
     })
@@ -205,6 +218,8 @@ export async function runUploadWorkflow(
   }
 
   let txOrManifestId: string
+  let cost: UploadCost | undefined
+  let size: UploadSize | undefined
   try {
     if (config['deploy-file']) {
       const filePath = expandPath(config['deploy-file'])
@@ -219,6 +234,8 @@ export async function runUploadWorkflow(
       }
 
       txOrManifestId = uploadResult.transactionId
+      cost = uploadResult.cost
+      size = uploadResult.size
 
       if (uploadResult.updatedCache && config['dedupe-cache-max-entries'] > 0) {
         cache = cleanupCache(uploadResult.updatedCache, config['dedupe-cache-max-entries'])
@@ -250,6 +267,8 @@ export async function runUploadWorkflow(
       }
 
       txOrManifestId = uploadResult.transactionId
+      cost = uploadResult.cost
+      size = uploadResult.size
 
       if (uploadResult.updatedCache && config['dedupe-cache-max-entries'] > 0) {
         cache = cleanupCache(uploadResult.updatedCache, config['dedupe-cache-max-entries'])
@@ -278,5 +297,9 @@ export async function runUploadWorkflow(
     io.error(`Upload failed: ${errorMessage}`)
   }
 
-  return txOrManifestId
+  return {
+    cost,
+    size,
+    transactionId: txOrManifestId,
+  }
 }

@@ -42,7 +42,7 @@ describe('hyperbeamAoFundingHint', () => {
         ],
         version: 'hyperbalance@0.1',
       }),
-    ).toContain('AO (ao-mainnet): send funds to node-operator')
+    ).toContain('AO: send funds to node-operator')
   })
 })
 

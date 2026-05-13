@@ -173,7 +173,7 @@ export default class Deploy extends Command {
 
         spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
 
-        const txOrManifestId = await runUploadWorkflow(deployKey, deployConfig, {
+        const { transactionId: txOrManifestId } = await runUploadWorkflow(deployKey, deployConfig, {
           error: (msg) => this.error(msg),
         })
 

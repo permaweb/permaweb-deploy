@@ -9,66 +9,10 @@ import Table from 'cli-table3'
 import { type UploadConfig, uploadFlagConfigs } from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
-import { formatUploadCost, formatUploadSize } from '../utils/display.js'
+import { formatUploadCost, formatUploadSize, uploadErrorTable } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
-
-function fundingDisplay(section: string): string {
-  const fundingLine = section
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line.startsWith('- '))
-    ?.replace(/^- /, '')
-
-  if (!fundingLine) {
-    return section
-  }
-
-  return fundingLine
-    .replace(/^AO: send funds to /, 'Sending AO to ')
-    .replace(/\. Local ledger:.*$/, '')
-}
-
-function uploadErrorTable(message: string): string {
-  const table = new Table({
-    style: { head: [] },
-  })
-  const sections = message
-    .split(/\n{2,}/)
-    .map((section) => section.trim())
-    .filter(Boolean)
-
-  for (const [index, section] of sections.entries()) {
-    if (index === 0) {
-      table.push(['Error', chalk.red(section)])
-      continue
-    }
-
-    if (section.startsWith('Required upload credit:')) {
-      table.push([
-        'Required upload credit',
-        chalk.blue(section.replace(/^Required upload credit:\s*/, '')),
-      ])
-      continue
-    }
-
-    if (section.startsWith('The HyperBEAM node requires AO')) {
-      table.push(['Funding', fundingDisplay(section)])
-      continue
-    }
-
-    table.push(['Note', section])
-  }
-
-  return boxen(`${chalk.red.bold('Upload failed')}\n\n${table.toString()}`, {
-    borderColor: 'red',
-    borderStyle: 'round',
-    padding: 1,
-    title: chalk.bold('Permaweb Deploy'),
-    titleAlignment: 'center',
-  })
-}
 
 export default class Upload extends Command {
   static override args = {}

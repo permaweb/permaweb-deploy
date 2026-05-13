@@ -14,6 +14,7 @@ import { promptAdvancedOptions } from '../prompts/arns.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
+import { uploadErrorTable } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
@@ -353,9 +354,17 @@ export default class Deploy extends Command {
           this.log(`\n${successMessage}`)
         }
       } catch (error) {
-        this.error(
-          chalk.red(`Deployment failed: ${error instanceof Error ? error.message : String(error)}`),
-        )
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const normalizedError = errorMessage.startsWith('Upload failed:')
+          ? errorMessage.replace(/^Upload failed:\s*/, '')
+          : errorMessage
+
+        if (errorMessage.startsWith('Upload failed:') && !process.env.CI && process.stdout.isTTY) {
+          this.log(`\n${uploadErrorTable(normalizedError, 'Deployment failed')}`)
+          this.exit(1)
+        }
+
+        this.error(chalk.red(`Deployment failed: ${errorMessage}`))
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'ExitPromptError') {

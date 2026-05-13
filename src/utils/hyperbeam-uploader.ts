@@ -60,6 +60,7 @@ export interface UploadSize {
 }
 
 const AO_BASE_UNITS = 1_000_000_000_000n
+const ARWEAVE_GATEWAY = 'https://arweave.net'
 
 export interface HyperbeamBundlerOptions {
   autoFund?: HyperbeamBundlerAutoFundOptions
@@ -287,6 +288,35 @@ export function hyperbeamBundlerLink(uploader: string, id: string, isManifest = 
   return new URL(`${encodeURIComponent(id)}${isManifest ? '/' : ''}`, normalizedBase).toString()
 }
 
+async function preflightHyperbeamBundlerArBalance(uploader: string): Promise<void> {
+  const nodeUrl = uploader.replace(/\/+$/, '')
+  const addressRes = await fetch(`${nodeUrl}/~meta@1.0/info/address`)
+  if (!addressRes.ok) {
+    throw new Error(`HyperBEAM bundler address check failed with HTTP ${addressRes.status}`)
+  }
+
+  const address = (await addressRes.text()).trim()
+  if (!address) {
+    throw new Error('HyperBEAM bundler address check returned an empty address')
+  }
+
+  const balanceRes = await fetch(`${ARWEAVE_GATEWAY}/wallet/${encodeURIComponent(address)}/balance`)
+  if (!balanceRes.ok) {
+    throw new Error(`HyperBEAM bundler AR balance check failed with HTTP ${balanceRes.status}`)
+  }
+
+  const balance = (await balanceRes.text()).trim()
+  if (!/^\d+$/.test(balance)) {
+    throw new Error('HyperBEAM bundler AR balance check returned an invalid balance')
+  }
+
+  if (BigInt(balance) === 0n) {
+    throw new Error(
+      `HyperBEAM bundler wallet ${address} has 0 AR; upload aborted because the node cannot seed data to Arweave.`,
+    )
+  }
+}
+
 function responseId(headers: Headers, body: string): string | undefined {
   const headerId = headers.get('id')
   if (headerId) {
@@ -328,6 +358,7 @@ function autoFundFailureNote(message: string): string {
 export class HyperbeamBundlerClient implements UploadClient {
   private readonly autoFund?: HyperbeamBundlerAutoFundOptions
   private readonly quote: HyperbeamBundlerQuoteOptions
+  private seedPreflight?: Promise<void>
   private readonly signer: unknown
   private readonly uploader: string
   private readonly uploadUrl: string
@@ -345,6 +376,9 @@ export class HyperbeamBundlerClient implements UploadClient {
   }
 
   async uploadFile(args: UploadFileArgs): Promise<{ id: string } & UploadClientResult> {
+    this.seedPreflight ??= preflightHyperbeamBundlerArBalance(this.uploader)
+    await this.seedPreflight
+
     const data = args.file
       ? typeof args.file === 'string'
         ? fs.readFileSync(args.file)

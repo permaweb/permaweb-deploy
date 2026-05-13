@@ -22,20 +22,15 @@ import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 export default class Deploy extends Command {
   static override args = {}
 
-  static override description = 'Deploy your application to the permaweb'
+  static override description = 'Deploy an application to the permaweb with optional ArNS update'
 
   static override examples = [
-    '<%= config.bin %> deploy  # Interactive mode',
-    '<%= config.bin %> deploy --arns-name my-app --wallet ./wallet.json',
-    '<%= config.bin %> deploy --arns-name my-app --private-key "$(cat wallet.json)"',
-    '<%= config.bin %> deploy --arns-name my-app --undername staging',
-    '<%= config.bin %> deploy --arns-name my-app --deploy-file ./dist/index.html',
-    '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --wallet ./private-key.txt',
-    '<%= config.bin %> deploy --arns-name my-app --sig-type ethereum --private-key "0x..."',
-    '<%= config.bin %> deploy --arns-name my-app --on-demand ario --max-token-amount 1000',
-    '<%= config.bin %> deploy --arns-name my-app --uploader https://up.arweave.net',
-    '<%= config.bin %> deploy --arns-name my-app --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
-    '<%= config.bin %> upload --wallet ./wallet.json  # Upload only (no ArNS update)',
+    '<%= config.bin %> deploy --wallet ./wallet.json',
+    '<%= config.bin %> deploy --wallet ./wallet.json --deploy-folder ./dist',
+    '<%= config.bin %> deploy --wallet ./wallet.json --deploy-file ./dist/index.html',
+    '<%= config.bin %> deploy --wallet ./wallet.json --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
+    '<%= config.bin %> deploy --wallet ./wallet.json --use-arns --arns-name my-app',
+    '<%= config.bin %> deploy --wallet ./wallet.json --use-arns --arns-name my-app --undername staging',
   ]
 
   static override flags = extractFlags(deployFlagConfigs)
@@ -44,10 +39,11 @@ export default class Deploy extends Command {
     try {
       const { flags } = await this.parse(Deploy)
 
-      const interactive = !flags['arns-name']
+      const useArns = Boolean(flags['use-arns'] || flags['arns-name'])
+      const interactive = useArns && !flags['arns-name']
 
       if (interactive) {
-        this.log(chalk.cyan.bold('\nInteractive Deployment Mode\n'))
+        this.log(chalk.cyan.bold('\nInteractive ArNS Deployment Mode\n'))
       }
 
       const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
@@ -59,7 +55,12 @@ export default class Deploy extends Command {
         wallet: baseConfig.wallet,
       }
 
-      if (interactive && !baseConfig.wallet && !baseConfig['private-key']) {
+      const shouldPromptWallet =
+        !baseConfig.wallet &&
+        !baseConfig['private-key'] &&
+        (interactive || !process.env.DEPLOY_KEY?.trim())
+
+      if (shouldPromptWallet) {
         const config = await getWalletConfig()
         walletConfig = {
           privateKey: config.privateKey,
@@ -107,6 +108,7 @@ export default class Deploy extends Command {
         undername: advancedOptions?.undername || baseConfig.undername,
         uploader: baseConfig.uploader,
         'uploader-type': baseConfig['uploader-type'],
+        'use-arns': useArns,
         wallet: walletConfig.wallet,
       }
 
@@ -140,10 +142,86 @@ export default class Deploy extends Command {
         }
       }
 
-      const arioProcess = deployConfig['ario-process']
-
       this.log(chalk.cyan.bold('\nStarting deployment...\n'))
       try {
+        if (!deployConfig['use-arns']) {
+          const { transactionId: txOrManifestId } = await runUploadWorkflow(
+            deployKey,
+            deployConfig,
+            {
+              error: (msg) => this.error(msg),
+            },
+          )
+
+          this.log('')
+
+          const isCI = Boolean(process.env.CI)
+          const bundlerLink =
+            deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
+              ? hyperbeamBundlerLink(
+                  deployConfig.uploader,
+                  txOrManifestId,
+                  !deployConfig['deploy-file'],
+                )
+              : undefined
+
+          if (isCI) {
+            this.log('Deployment Successful!')
+            this.log('Tx ID: ' + txOrManifestId)
+            if (deployConfig.uploader) {
+              this.log('Bundler service: ' + deployConfig.uploader)
+              this.log('Uploader type: ' + deployConfig['uploader-type'])
+            }
+
+            if (bundlerLink) {
+              this.log('Bundler link: ' + bundlerLink)
+            }
+
+            this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
+          } else {
+            const table = new Table({
+              style: {
+                head: [],
+              },
+            })
+
+            table.push(
+              ['Tx ID', chalk.green(txOrManifestId)],
+              ...(deployConfig.uploader
+                ? ([
+                    ['Bundler service', chalk.cyan(deployConfig.uploader)],
+                    ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
+                  ] as [string, string][])
+                : []),
+              ...(bundlerLink
+                ? ([['Bundler link', chalk.yellow(bundlerLink)]] as [string, string][])
+                : []),
+              ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
+            )
+
+            const successMessage = boxen(
+              `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
+              {
+                borderColor: 'green',
+                borderStyle: 'round',
+                padding: 1,
+                title: chalk.bold('Permaweb Deploy'),
+                titleAlignment: 'center',
+              },
+            )
+
+            this.log(`\n${successMessage}`)
+          }
+
+          return
+        }
+
+        const arioProcess = deployConfig['ario-process']
+        const arnsName = deployConfig['arns-name']
+        if (!arnsName) {
+          this.error('--use-arns requires --arns-name')
+        }
+
         const spinner = ora()
 
         spinner.start('Initializing ARIO')
@@ -163,15 +241,13 @@ export default class Deploy extends Command {
 
         spinner.succeed('ARIO initialized')
 
-        spinner.start(`Fetching ArNS record for ${chalk.yellow(deployConfig['arns-name'])}`)
-        const arnsNameRecord = await ario
-          .getArNSRecord({ name: deployConfig['arns-name'] })
-          .catch(() => {
-            spinner.fail(`ArNS name ${chalk.red(deployConfig['arns-name'])} does not exist`)
-            this.error(`ArNS name [${deployConfig['arns-name']}] does not exist`)
-          })
+        spinner.start(`Fetching ArNS record for ${chalk.yellow(arnsName)}`)
+        const arnsNameRecord = await ario.getArNSRecord({ name: arnsName }).catch(() => {
+          spinner.fail(`ArNS name ${chalk.red(arnsName)} does not exist`)
+          this.error(`ArNS name [${arnsName}] does not exist`)
+        })
 
-        spinner.succeed(`ArNS record fetched for ${chalk.green(deployConfig['arns-name'])}`)
+        spinner.succeed(`ArNS record fetched for ${chalk.green(arnsName)}`)
 
         const { transactionId: txOrManifestId } = await runUploadWorkflow(deployKey, deployConfig, {
           error: (msg) => this.error(msg),
@@ -212,7 +288,11 @@ export default class Deploy extends Command {
         const isCI = Boolean(process.env.CI)
         const bundlerLink =
           deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
-            ? hyperbeamBundlerLink(deployConfig.uploader, txOrManifestId)
+            ? hyperbeamBundlerLink(
+                deployConfig.uploader,
+                txOrManifestId,
+                !deployConfig['deploy-file'],
+              )
             : undefined
 
         if (isCI) {
@@ -227,7 +307,7 @@ export default class Deploy extends Command {
             this.log('Bundler link: ' + bundlerLink)
           }
 
-          this.log('ArNS Name: ' + deployConfig['arns-name'])
+          this.log('ArNS Name: ' + arnsName)
           this.log('Undername: ' + deployConfig.undername)
           this.log('ANT: ' + arnsNameRecord.processId)
           this.log('ARIO Process: ' + arioProcess)
@@ -235,7 +315,6 @@ export default class Deploy extends Command {
           this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
         } else {
           const table = new Table({
-            head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
             style: {
               head: [],
             },
@@ -252,7 +331,7 @@ export default class Deploy extends Command {
             ...(bundlerLink
               ? ([['Bundler link', chalk.yellow(bundlerLink)]] as [string, string][])
               : []),
-            ['ArNS Name', chalk.yellow(deployConfig['arns-name'])],
+            ['ArNS Name', chalk.yellow(arnsName)],
             ['Undername', chalk.yellow(deployConfig.undername)],
             ['ANT', chalk.cyan(arnsNameRecord.processId)],
             ['ARIO Process', chalk.gray(arioProcess)],

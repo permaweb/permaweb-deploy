@@ -31,6 +31,19 @@ describe(
       expect(result.error).toBeUndefined()
     })
 
+    it('should deploy without requiring ArNS by default', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--no-dedupe',
+      ])
+
+      expect(result.error).toBeUndefined()
+    })
+
     it('should validate on-demand token options', async () => {
       const { error } = await runCommand([
         'deploy',

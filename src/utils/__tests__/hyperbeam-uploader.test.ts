@@ -7,15 +7,21 @@ import {
 } from '../hyperbeam-uploader.js'
 
 describe('hyperbeamBundlerLink', () => {
-  it('builds a direct HyperBEAM raw resolver URL', () => {
+  it('builds a direct HyperBEAM item URL', () => {
     expect(hyperbeamBundlerLink('https://hyperbeam.example.com', 'abc123')).toBe(
-      'https://hyperbeam.example.com/~arweave@2.9/raw=abc123',
+      'https://hyperbeam.example.com/abc123',
     )
   })
 
   it('handles uploader URLs with trailing slashes', () => {
     expect(hyperbeamBundlerLink('https://hyperbeam.example.com/', 'abc123')).toBe(
-      'https://hyperbeam.example.com/~arweave@2.9/raw=abc123',
+      'https://hyperbeam.example.com/abc123',
+    )
+  })
+
+  it('uses an app-root URL for manifests', () => {
+    expect(hyperbeamBundlerLink('https://hyperbeam.example.com', 'abc123', true)).toBe(
+      'https://hyperbeam.example.com/abc123/',
     )
   })
 })

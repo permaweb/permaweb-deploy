@@ -178,7 +178,7 @@ export default class Upload extends Command {
         const isCI = Boolean(process.env.CI)
         const bundlerLink =
           uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
-            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId)
+            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId, !uploadCfg['deploy-file'])
             : undefined
 
         if (isCI) {

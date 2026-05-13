@@ -282,9 +282,9 @@ export async function quoteHyperbeamUpload(
   return { amount: quote.amount, ledgerId: quote.ledgerId, tokenId: quote.tokenId }
 }
 
-export function hyperbeamBundlerLink(uploader: string, id: string): string {
+export function hyperbeamBundlerLink(uploader: string, id: string, isManifest = false): string {
   const normalizedBase = uploader.endsWith('/') ? uploader : `${uploader}/`
-  return new URL(`~arweave@2.9/raw=${encodeURIComponent(id)}`, normalizedBase).toString()
+  return new URL(`${encodeURIComponent(id)}${isManifest ? '/' : ''}`, normalizedBase).toString()
 }
 
 function responseId(headers: Headers, body: string): string | undefined {

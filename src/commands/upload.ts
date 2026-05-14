@@ -128,7 +128,7 @@ export default class Upload extends Command {
         if (isCI) {
           this.log('Upload successful!')
           this.log('Tx ID: ' + txOrManifestId)
-          if (uploadResult.size > 0) {
+          if (uploadResult.size) {
             this.log('Upload size: ' + formatUploadSize(uploadResult.size))
           }
 
@@ -152,7 +152,7 @@ export default class Upload extends Command {
           })
 
           table.push(['Tx ID', chalk.green(txOrManifestId)])
-          if (uploadResult.size > 0) {
+          if (uploadResult.size) {
             table.push(['Upload size', chalk.blue(formatUploadSize(uploadResult.size))])
           }
 

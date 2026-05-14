@@ -120,6 +120,7 @@ export default class Upload extends Command {
         this.log('')
 
         const isCI = Boolean(process.env.CI)
+        const uploadSize = uploadResult.size
         const bundlerLink =
           uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
             ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId, !uploadCfg['deploy-file'])
@@ -128,8 +129,8 @@ export default class Upload extends Command {
         if (isCI) {
           this.log('Upload successful!')
           this.log('Tx ID: ' + txOrManifestId)
-          if (uploadResult.size) {
-            this.log('Upload size: ' + formatUploadSize(uploadResult.size))
+          if (uploadSize) {
+            this.log('Upload size: ' + formatUploadSize(uploadSize))
           }
 
           if (uploadResult.cost) {
@@ -152,8 +153,8 @@ export default class Upload extends Command {
           })
 
           table.push(['Tx ID', chalk.green(txOrManifestId)])
-          if (uploadResult.size) {
-            table.push(['Upload size', chalk.blue(formatUploadSize(uploadResult.size))])
+          if (uploadSize) {
+            table.push(['Upload size', chalk.blue(formatUploadSize(uploadSize))])
           }
 
           if (uploadResult.cost) {

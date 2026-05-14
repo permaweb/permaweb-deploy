@@ -1,6 +1,6 @@
 import { runCommand } from '@oclif/test'
 import { http, HttpResponse } from 'msw'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { TEST_ETH_PRIVATE_KEY } from '../constants.js'
 import { mockInsufficientBalance } from '../mocks/turbo-handlers.js'
@@ -9,18 +9,6 @@ import { server } from '../setup.js'
 describe(
   'deploy command',
   () => {
-    beforeAll(() => {
-      server.listen({ onUnhandledRequest: 'warn' })
-    })
-
-    afterEach(() => {
-      server.resetHandlers()
-    })
-
-    afterAll(() => {
-      server.close()
-    })
-
     it('should show deploy help message', async () => {
       const result = await runCommand(['deploy', '--help'])
       expect(result.error).toBeUndefined()

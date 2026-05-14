@@ -9,6 +9,7 @@ import Table from 'cli-table3'
 import { type UploadConfig, uploadFlagConfigs } from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
+import { formatUploadCost, formatUploadSize, uploadErrorTable } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
@@ -111,21 +112,31 @@ export default class Upload extends Command {
       this.log(chalk.cyan.bold('\nStarting upload...\n'))
 
       try {
-        const txOrManifestId = await runUploadWorkflow(deployKey, uploadCfg, {
+        const uploadResult = await runUploadWorkflow(deployKey, uploadCfg, {
           error: (msg) => this.error(msg),
         })
+        const txOrManifestId = uploadResult.transactionId
 
         this.log('')
 
         const isCI = Boolean(process.env.CI)
+        const uploadSize = uploadResult.size
         const bundlerLink =
           uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
-            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId)
+            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId, !uploadCfg['deploy-file'])
             : undefined
 
         if (isCI) {
           this.log('Upload successful!')
           this.log('Tx ID: ' + txOrManifestId)
+          if (uploadSize) {
+            this.log('Upload size: ' + formatUploadSize(uploadSize))
+          }
+
+          if (uploadResult.cost) {
+            this.log('Upload cost: ' + formatUploadCost(uploadResult.cost))
+          }
+
           if (uploadCfg.uploader) {
             this.log('Bundler service: ' + uploadCfg.uploader)
             this.log('Uploader type: ' + uploadCfg['uploader-type'])
@@ -138,11 +149,17 @@ export default class Upload extends Command {
           this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
         } else {
           const table = new Table({
-            head: [chalk.cyan.bold('Property'), chalk.cyan.bold('Value')],
             style: { head: [] },
           })
 
           table.push(['Tx ID', chalk.green(txOrManifestId)])
+          if (uploadSize) {
+            table.push(['Upload size', chalk.blue(formatUploadSize(uploadSize))])
+          }
+
+          if (uploadResult.cost) {
+            table.push(['Upload cost', chalk.blue(formatUploadCost(uploadResult.cost))])
+          }
 
           if (uploadCfg.uploader) {
             table.push(
@@ -171,8 +188,22 @@ export default class Upload extends Command {
           this.log(`\n${successMessage}`)
         }
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const normalizedError = errorMessage.startsWith('Upload failed:')
+          ? errorMessage.replace(/^Upload failed:\s*/, '')
+          : errorMessage
+
+        if (!process.env.CI && process.stdout.isTTY) {
+          this.log(`\n${uploadErrorTable(normalizedError)}`)
+          this.exit(1)
+        }
+
         this.error(
-          chalk.red(`Upload failed: ${error instanceof Error ? error.message : String(error)}`),
+          chalk.red(
+            errorMessage.startsWith('Upload failed:')
+              ? errorMessage
+              : `Upload failed: ${errorMessage}`,
+          ),
         )
       }
     } catch (error) {

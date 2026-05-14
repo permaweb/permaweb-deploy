@@ -1,13 +1,13 @@
 # Permaweb Deploy
 
-Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of web applications to the permaweb using Arweave. It uploads your build folder or a single file, creates Arweave manifests, and updates ArNS (Arweave Name Service) records via ANT (Arweave Name Token) with the transaction ID.
+Inspired by the [cookbook github action deployment guide](https://cookbook.arweave.dev/guides/deployment/github-action.html), `permaweb-deploy` is a Node.js command-line tool designed to streamline the deployment of web applications to the permaweb using Arweave. It uploads your build folder or a single file, creates Arweave manifests, and can optionally update ArNS (Arweave Name Service) records via ANT (Arweave Name Token) with the transaction ID.
 
 ## Features
 
 - **Turbo SDK Integration:** Uses Turbo SDK for fast, reliable file uploads to Arweave
 - **On-Demand Payment:** Pay with ARIO or Base-ETH tokens on-demand during upload
 - **Arweave Manifest v0.2.0:** Creates manifests with fallback support for SPAs
-- **ArNS Updates:** Updates ArNS records via ANT with new transaction IDs and metadata
+- **Optional ArNS Updates:** Updates ArNS records via ANT with new transaction IDs and metadata
 - **Automated Workflow:** Integrates with GitHub Actions for continuous deployment
 - **Git Hash Tagging:** Automatically tags deployments with Git commit hashes
 - **404 Fallback Detection:** Automatically detects and sets 404.html as fallback
@@ -77,7 +77,7 @@ Run the deploy command without arguments to be guided through all deployment opt
 permaweb-deploy deploy
 ```
 
-This will prompt you for:
+This uploads to the permaweb by default. Use `--use-arns` or `--arns-name` to run the guided ArNS update flow, which will prompt you for:
 
 - ArNS name
 - Wallet method (file, string, or environment variable)
@@ -91,7 +91,10 @@ Use flags for faster, scriptable deployments:
 
 ```bash
 # Basic deployment with wallet file
-permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json
+permaweb-deploy deploy --wallet ./wallet.json
+
+# Deployment with ArNS update
+permaweb-deploy deploy --use-arns --arns-name my-app --wallet ./wallet.json
 ```
 
 Deploy using private key directly:
@@ -118,11 +121,12 @@ Deploy a single file:
 permaweb-deploy deploy --arns-name my-app --wallet ./wallet.json --deploy-file ./path/to/file.txt
 ```
 
-### Upload only (no ArNS)
+### Upload/deploy without ArNS
 
-To upload a folder or file to Arweave **without** updating an ArNS name, use the `upload` command (same Turbo upload, dedupe cache, and payment options as deploy, minus ArNS flags):
+`deploy` uploads without updating ArNS by default. You can also use the `upload` command explicitly for the same Turbo upload, dedupe cache, and payment options as deploy, minus ArNS flags:
 
 ```bash
+permaweb-deploy deploy --wallet ./wallet.json --deploy-folder ./dist
 permaweb-deploy upload --wallet ./wallet.json --deploy-folder ./dist
 permaweb-deploy upload --wallet ./wallet.json --deploy-file ./dist/index.html
 DEPLOY_KEY=$(base64 -i wallet.json) permaweb-deploy upload --deploy-folder ./dist
@@ -217,14 +221,13 @@ permaweb-deploy upload \
   --uploader https://hyperbeam.example.com
 
 permaweb-deploy deploy \
-  --arns-name my-app \
   --wallet ./wallet.json \
   --deploy-folder ./dist \
   --uploader-type hyperbeam \
   --uploader https://hyperbeam.example.com
 ```
 
-If the node follows the standard AO-paid HyperBEAM bundler flow, the CLI can fund the uploader wallet before uploading:
+If the node follows the standard AO-paid HyperBEAM bundler flow, either command can fund the uploader wallet before uploading:
 
 ```bash
 permaweb-deploy upload \
@@ -238,15 +241,16 @@ permaweb-deploy upload \
 **Notes:**
 
 - Turbo billing and signer behavior follow Turbo.
-- HyperBEAM uploads require an Arweave JWK signer. With `--hyperbeam-auto-fund`, the CLI signs each data item, asks the node's `metering@1.0` device for a byte quote, sends AO to the node address from `/~meta@1.0/info/address`, imports that deposit through `/~ao-payment@1.0/ingest`, and waits for the uploader's balance at `/ledger~node-process@1.0/now/balance/<address>` before uploading. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
-- `--hyperbeam-fund-amount` is an optional override for the minimum local ledger balance to ensure, in AO base units. Without it, `--hyperbeam-auto-fund` uses the node's `metering@1.0` quote for the signed byte count. Use `--hyperbeam-token-id` only for a non-default AO token process, and `--hyperbeam-ledger-id` only for a non-default local ledger profile.
+- HyperBEAM uploads require an Arweave JWK signer. Before uploading, the CLI checks the node address from `/~meta@1.0/info/address` against `https://arweave.net/wallet/<address>/balance` and aborts if the bundler wallet has 0 AR. With `--hyperbeam-auto-fund`, the CLI signs each data item, asks the node's byte-pricing profile for a quote, sends AO to the node deposit address, imports that deposit through `/~ao-payment@1.0/ingest`, and waits for the uploader's balance at `/ledger~node-process@1.0/now/balance/<address>` before uploading. The default route is `/~bundler@1.0/item?codec-device=ans104@1.0`; override it with `--hyperbeam-upload-path` if your node exposes a different bundler route.
+- `--hyperbeam-fund-amount` is an optional override for the minimum local ledger balance to ensure, in AO base units. Without it, `--hyperbeam-auto-fund` uses the node's byte-pricing quote for the signed byte count. Use `--hyperbeam-token-id` only for a non-default AO token process, and `--hyperbeam-ledger-id` only for a non-default local ledger profile.
 - Use a **base URL only** (e.g. `https://up.arweave.net` or `https://hyperbeam.example.com`), not a path to a specific file or route.
 
 ### Command Options
 
-**`deploy`** (ArNS update):
+**`deploy`** (upload by default, optional ArNS update):
 
-- `--arns-name, -n` (required): The ArNS name to update
+- `--use-arns`: Update an ArNS/ANT record after upload
+- `--arns-name, -n`: The ArNS name to update. Required when using `--use-arns`; also implies ArNS mode for backwards compatibility.
 - `--ario-process, -p`: ARIO process to use (`mainnet`, `testnet`, or a custom process ID). Default: `mainnet`
 - `--deploy-folder, -d`: Folder to deploy. Default: `./dist`
 - `--deploy-file, -f`: Deploy a single file instead of a folder
@@ -268,7 +272,7 @@ permaweb-deploy upload \
 - `--hyperbeam-ledger-id`: Advanced local HyperBEAM ledger ID override
 - `--hyperbeam-ao-state-url`: AO state endpoint used while waiting for auto-fund transfer assignment. Default: `https://state.forward.computer`
 
-**`upload`** (no ArNS): accepts `--deploy-folder`, `--deploy-file`, wallet/signer flags, uploader flags, `--on-demand` / `--max-token-amount`, and dedupe flags only.
+**`upload`** (explicit upload without ArNS): accepts `--deploy-folder`, `--deploy-file`, wallet/signer flags, uploader flags, `--on-demand` / `--max-token-amount`, and dedupe flags only.
 
 ### Deduplication
 
@@ -617,7 +621,7 @@ permaweb-deploy/
 
 - **Dedicated Wallet:** Always use a dedicated wallet for deployments to minimize security risks
 - **Wallet Encoding:** Arweave wallets must be base64 encoded to be used in the deployment script
-- **ArNS Name:** The ArNS Name must be passed so that the ANT Process can be resolved to update the target undername or root record
+- **ArNS Name:** Required only when updating an ANT/ArNS target undername or root record
 - **Turbo Credits:** Ensure your wallet has sufficient Turbo Credits, or use on-demand payment for automatic funding
 - **On-Demand Limits:** Set reasonable `--max-token-amount` limits to prevent unexpected costs
 - **Secret Management:** Keep your `DEPLOY_KEY` secret secure and never commit it to your repository

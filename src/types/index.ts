@@ -4,7 +4,7 @@ export type SignerType = 'arweave' | 'ethereum' | 'kyve' | 'polygon'
 
 export interface DeployOptions {
   'ario-process': string
-  'arns-name': string
+  'arns-name'?: string
   'deploy-file': string
   'deploy-folder': string
   'private-key': string

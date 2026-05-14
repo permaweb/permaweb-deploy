@@ -13,10 +13,12 @@ import {
   touchCacheEntry,
   type TransactionCache,
 } from './cache.js'
-import type { UploadClient } from './hyperbeam-uploader.js'
+import type { UploadClient, UploadCost, UploadSize } from './hyperbeam-uploader.js'
 
 export interface UploadResult {
   cacheHit: boolean
+  cost?: UploadCost
+  size?: UploadSize
   transactionId: string
   updatedCache?: TransactionCache
 }
@@ -87,6 +89,8 @@ export async function uploadFile(
     const updatedCache = setCachedTransaction(options.cache, fileHash, uploadResult.id)
     return {
       cacheHit: false,
+      cost: uploadResult.cost,
+      size: uploadResult.size,
       transactionId: uploadResult.id,
       updatedCache,
     }
@@ -94,6 +98,8 @@ export async function uploadFile(
 
   return {
     cacheHit: false,
+    cost: uploadResult.cost,
+    size: uploadResult.size,
     transactionId: uploadResult.id,
   }
 }

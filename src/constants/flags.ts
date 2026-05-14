@@ -220,6 +220,13 @@ export const globalFlags = {
       required: false,
     }),
   }),
+  useArns: createFlagConfig<boolean>({
+    flag: Flags.boolean({
+      default: false,
+      description: 'Update an ArNS/ANT record after upload.',
+      required: false,
+    }),
+  }),
   wallet: createFlagConfig<string | undefined>({
     flag: Flags.string({
       char: 'w',
@@ -262,6 +269,7 @@ export const deployFlags = {
   undername: globalFlags.undername.flag,
   uploader: globalFlags.uploader.flag,
   'uploader-type': globalFlags.uploaderType.flag,
+  'use-arns': globalFlags.useArns.flag,
   wallet: globalFlags.wallet.flag,
 }
 
@@ -289,7 +297,7 @@ export const walletFlags = {
  */
 export interface DeployConfig {
   'ario-process': string
-  'arns-name': string
+  'arns-name'?: string
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
@@ -306,6 +314,7 @@ export interface DeployConfig {
   'sig-type': string
   'ttl-seconds': string
   undername: string
+  'use-arns': boolean
   uploader?: string
   'uploader-type': string
   wallet?: string
@@ -336,6 +345,7 @@ export const deployFlagConfigs = {
   undername: globalFlags.undername,
   uploader: globalFlags.uploader,
   'uploader-type': globalFlags.uploaderType,
+  'use-arns': globalFlags.useArns,
   wallet: globalFlags.wallet,
 } as const
 

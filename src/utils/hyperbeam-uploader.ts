@@ -171,6 +171,19 @@ function formatAoAmount(amount: bigint): string {
   return `${whole.toString()}.${fraction.toString().padStart(12, '0').replaceAll(/0+$/g, '')} AO`
 }
 
+function responsePreview(body: string): string | undefined {
+  const preview = body.replaceAll(/\s+/g, ' ').trim()
+  if (!preview) {
+    return undefined
+  }
+
+  if (/^(<!doctype html\b|<html\b)/i.test(preview)) {
+    return 'HTML error response'
+  }
+
+  return preview.slice(0, 300)
+}
+
 export async function autoFundHyperbeamLedger(
   options: HyperbeamAutoFundOptions,
 ): Promise<FundingResult> {
@@ -440,7 +453,7 @@ export class HyperbeamBundlerClient implements UploadClient {
     const body = await res.text()
 
     if (!res.ok) {
-      const preview = body.replaceAll(/\s+/g, ' ').trim().slice(0, 300)
+      const preview = responsePreview(body)
       const paymentHint = res.status === 402 ? await this.paymentHint() : undefined
       throw new Error(
         [

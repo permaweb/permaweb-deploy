@@ -1,18 +1,32 @@
-name: Auto Tag and Publish to NPM
+name: Auto Version and Publish to NPM
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'package.json'
   workflow_dispatch:
+    inputs:
+      update_type:
+        description: Version update type
+        required: true
+        default: patch
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
 
 permissions:
   contents: write
+  pull-requests: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
 
 jobs:
   publish:
+    if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
     runs-on: ubuntu-latest
 
     steps:
@@ -20,43 +34,140 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.DEPLOY_PAT || github.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          registry-url: https://registry.npmjs.org
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
 
-      - name: Get package version
+      - name: Get version update type
+        id: release-type
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const updateTypes = ['major', 'minor', 'patch'];
+
+            function selectedUpdateTypes(body) {
+              return updateTypes.filter((type) => {
+                const pattern = new RegExp(`^- \\[[xX]\\]\\s*${type}\\s*$`, 'im');
+                return pattern.test(body ?? '');
+              });
+            }
+
+            if (context.eventName === 'workflow_dispatch') {
+              const updateType = context.payload.inputs?.update_type;
+
+              if (!updateTypes.includes(updateType)) {
+                core.setFailed(`Invalid version update type: ${updateType}`);
+                return;
+              }
+
+              core.setOutput('update-type', updateType);
+              core.info(`Selected version update: ${updateType}`);
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner,
+              repo,
+              commit_sha: context.sha,
+            });
+
+            const pullRequest =
+              response.data.find((pr) => pr.merged_at && pr.base.ref === 'main') ??
+              response.data.find((pr) => pr.merged_at);
+
+            if (!pullRequest) {
+              core.setFailed(`No merged pull request found for commit ${context.sha}.`);
+              return;
+            }
+
+            const selected = selectedUpdateTypes(pullRequest.body);
+
+            if (selected.length !== 1) {
+              core.setFailed(
+                `PR #${pullRequest.number} must have exactly one version update checkbox selected. Found ${selected.length}.`,
+              );
+              return;
+            }
+
+            core.setOutput('update-type', selected[0]);
+            core.setOutput('pr-number', String(pullRequest.number));
+            core.info(`Selected version update from PR #${pullRequest.number}: ${selected[0]}`);
+
+      - name: Bump package version
         id: package-version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=v$VERSION" >> $GITHUB_OUTPUT
-          echo "Package version: v$VERSION"
+          node <<'NODE'
+          const fs = require('node:fs');
 
-      - name: Check if tag exists
-        id: tag-exists
+          const updateType = process.env.UPDATE_TYPE;
+          const packagePath = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          const match = /^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/.exec(pkg.version);
+
+          if (!match) {
+            throw new Error(`Unsupported package version format: ${pkg.version}`);
+          }
+
+          let [, major, minor, patch] = match;
+          major = Number(major);
+          minor = Number(minor);
+          patch = Number(patch);
+
+          switch (updateType) {
+            case 'major':
+              major += 1;
+              minor = 0;
+              patch = 0;
+              break;
+            case 'minor':
+              minor += 1;
+              patch = 0;
+              break;
+            case 'patch':
+              patch += 1;
+              break;
+            default:
+              throw new Error(`Invalid version update type: ${updateType}`);
+          }
+
+          const nextVersion = `${major}.${minor}.${patch}`;
+          pkg.version = nextVersion;
+          fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `package-name=${pkg.name}\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
+          console.log(`Bumped ${pkg.name} from ${match[0]} to ${nextVersion}`);
+          NODE
+        env:
+          UPDATE_TYPE: ${{ steps.release-type.outputs.update-type }}
+
+      - name: Check if git tag exists
         run: |
-          if git tag --list | grep -q "^${{ steps.package-version.outputs.version }}$"; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tag ${{ steps.package-version.outputs.version }} already exists"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Tag ${{ steps.package-version.outputs.version }} does not exist"
+          if git tag --list "v${PACKAGE_VERSION}" | grep -q .; then
+            echo "::error::Tag v${PACKAGE_VERSION} already exists"
+            exit 1
           fi
+        env:
+          PACKAGE_VERSION: ${{ steps.package-version.outputs.version }}
 
-      - name: Create and push tag
-        if: github.ref == 'refs/heads/main' && steps.tag-exists.outputs.exists == 'false'
+      - name: Check if npm version exists
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.package-version.outputs.version }}
-          git push origin ${{ steps.package-version.outputs.version }}
-          echo "Created and pushed tag: ${{ steps.package-version.outputs.version }}"
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org > /dev/null 2>&1; then
+            echo "::error::${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on npm"
+            exit 1
+          fi
+        env:
+          PACKAGE_NAME: ${{ steps.package-version.outputs.package-name }}
+          PACKAGE_VERSION: ${{ steps.package-version.outputs.version }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -64,16 +175,24 @@ jobs:
       - name: Build package
         run: pnpm build
 
-      - name: Setup npm authentication
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish to NPM
-        run: npm publish
+      - name: Verify npm authentication
+        run: npm whoami --registry=https://registry.npmjs.org
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Cleanup
-        if: always()
-        run: rm -f .npmrc
+      - name: Commit version bump and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: release v${PACKAGE_VERSION} [skip ci]"
+          git tag "v${PACKAGE_VERSION}"
+          git push origin HEAD:main
+          git push origin "v${PACKAGE_VERSION}"
+        env:
+          PACKAGE_VERSION: ${{ steps.package-version.outputs.version }}
+
+      - name: Publish to NPM
+        run: npm publish --access public --registry=https://registry.npmjs.org
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

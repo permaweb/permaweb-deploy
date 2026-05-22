@@ -4,10 +4,42 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
 
 jobs:
+  validate-version-selection:
+    name: Validate version selection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate release checkbox
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request?.body ?? '';
+            const updateTypes = ['major', 'minor', 'patch'];
+            const selected = updateTypes.filter((type) => {
+              const pattern = new RegExp(`^- \\[[xX]\\]\\s*${type}\\s*$`, 'im');
+              return pattern.test(body);
+            });
+
+            if (selected.length !== 1) {
+              core.setFailed(
+                `Select exactly one version update checkbox in the PR body. Found ${selected.length}.`,
+              );
+              return;
+            }
+
+            core.info(`Selected version update: ${selected[0]}`);
+
   ci:
     name: ${{ matrix.task }}
+    needs: validate-version-selection
     runs-on: ubuntu-latest
 
     strategy:
@@ -29,7 +61,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10
 
       - name: Get pnpm store directory
         id: pnpm-cache
@@ -46,7 +78,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Run ${{ matrix.task }}
         run: |

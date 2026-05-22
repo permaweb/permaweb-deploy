@@ -8,11 +8,11 @@ import {
   TurboAuthenticatedConfiguration,
   TurboFactory,
 } from '@ardrive/turbo-sdk'
-import chalk from 'chalk'
 import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
 import { cleanupCache, loadCache, saveCache } from '../utils/cache.js'
+import { chalk } from '../utils/chalk.js'
 import {
   type HyperbeamBundlerAutoFundOptions,
   HyperbeamBundlerClient,

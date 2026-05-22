@@ -1,11 +1,9 @@
-import boxen from 'boxen'
-import chalk from 'chalk'
-// eslint-disable-next-line import/no-named-as-default
-import Table from 'cli-table3'
-
+import { chalk } from './chalk.js'
 import type { UploadCost, UploadSize } from './hyperbeam-uploader.js'
 
 const AO_BASE_UNITS = 1_000_000_000_000n
+
+export type DisplayRow = [label: string, value: string]
 
 export function formatUploadSize(size: UploadSize): string {
   return `${(size.signedBytes ?? size.payloadBytes).toLocaleString()} bytes`
@@ -26,6 +24,10 @@ export function formatUploadCost(cost: UploadCost): string {
   return `${decimal} AO`
 }
 
+export function formatDisplayRows(rows: DisplayRow[]): string {
+  return rows.map(([label, value]) => `${label}: ${value}`).join('\n')
+}
+
 function fundingDisplay(section: string): string {
   const fundingLine = section
     .split('\n')
@@ -42,10 +44,8 @@ function fundingDisplay(section: string): string {
     .replace(/\. Local ledger:.*$/, '')
 }
 
-export function uploadErrorTable(message: string, title = 'Upload failed'): string {
-  const table = new Table({
-    style: { head: [] },
-  })
+export function formatUploadError(message: string, title = 'Upload failed'): string {
+  const rows: DisplayRow[] = []
   const sections = message
     .split(/\n{2,}/)
     .map((section) => section.trim())
@@ -53,12 +53,12 @@ export function uploadErrorTable(message: string, title = 'Upload failed'): stri
 
   for (const [index, section] of sections.entries()) {
     if (index === 0) {
-      table.push(['Error', chalk.red(section)])
+      rows.push(['Error', chalk.red(section)])
       continue
     }
 
     if (section.startsWith('Required upload credit:')) {
-      table.push([
+      rows.push([
         'Required upload credit',
         chalk.blue(section.replace(/^Required upload credit:\s*/, '')),
       ])
@@ -66,18 +66,12 @@ export function uploadErrorTable(message: string, title = 'Upload failed'): stri
     }
 
     if (section.startsWith('The HyperBEAM node requires AO')) {
-      table.push(['Funding', fundingDisplay(section)])
+      rows.push(['Funding', fundingDisplay(section)])
       continue
     }
 
-    table.push(['Note', section])
+    rows.push(['Note', section])
   }
 
-  return boxen(`${chalk.red.bold(title)}\n\n${table.toString()}`, {
-    borderColor: 'red',
-    borderStyle: 'round',
-    padding: 1,
-    title: chalk.bold('Permaweb Deploy'),
-    titleAlignment: 'center',
-  })
+  return `${chalk.bold(chalk.red(title))}\n\n${formatDisplayRows(rows)}`
 }

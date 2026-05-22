@@ -1,15 +1,18 @@
 import fs from 'node:fs'
 
 import { Command } from '@oclif/core'
-import boxen from 'boxen'
-import chalk from 'chalk'
-// eslint-disable-next-line import/no-named-as-default
-import Table from 'cli-table3'
 
 import { type UploadConfig, uploadFlagConfigs } from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
+import { chalk } from '../utils/chalk.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
-import { formatUploadCost, formatUploadSize, uploadErrorTable } from '../utils/display.js'
+import {
+  type DisplayRow,
+  formatDisplayRows,
+  formatUploadCost,
+  formatUploadError,
+  formatUploadSize,
+} from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
@@ -37,7 +40,7 @@ export default class Upload extends Command {
       const interactive = !flags.wallet && !flags['private-key'] && !process.env.DEPLOY_KEY?.trim()
 
       if (interactive) {
-        this.log(chalk.cyan.bold('\nInteractive upload mode\n'))
+        this.log(chalk.bold(chalk.cyan('\nInteractive upload mode\n')))
       }
 
       const baseConfig = (await resolveConfig<typeof uploadFlagConfigs>(uploadFlagConfigs, flags, {
@@ -109,7 +112,7 @@ export default class Upload extends Command {
         }
       }
 
-      this.log(chalk.cyan.bold('\nStarting upload...\n'))
+      this.log(chalk.bold(chalk.cyan('\nStarting upload...\n')))
 
       try {
         const uploadResult = await runUploadWorkflow(deployKey, uploadCfg, {
@@ -119,74 +122,36 @@ export default class Upload extends Command {
 
         this.log('')
 
-        const isCI = Boolean(process.env.CI)
         const uploadSize = uploadResult.size
         const bundlerLink =
           uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
             ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId, !uploadCfg['deploy-file'])
             : undefined
 
-        if (isCI) {
-          this.log('Upload successful!')
-          this.log('Tx ID: ' + txOrManifestId)
-          if (uploadSize) {
-            this.log('Upload size: ' + formatUploadSize(uploadSize))
-          }
-
-          if (uploadResult.cost) {
-            this.log('Upload cost: ' + formatUploadCost(uploadResult.cost))
-          }
-
-          if (uploadCfg.uploader) {
-            this.log('Bundler service: ' + uploadCfg.uploader)
-            this.log('Uploader type: ' + uploadCfg['uploader-type'])
-          }
-
-          if (bundlerLink) {
-            this.log('Bundler link: ' + bundlerLink)
-          }
-
-          this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
-        } else {
-          const table = new Table({
-            style: { head: [] },
-          })
-
-          table.push(['Tx ID', chalk.green(txOrManifestId)])
-          if (uploadSize) {
-            table.push(['Upload size', chalk.blue(formatUploadSize(uploadSize))])
-          }
-
-          if (uploadResult.cost) {
-            table.push(['Upload cost', chalk.blue(formatUploadCost(uploadResult.cost))])
-          }
-
-          if (uploadCfg.uploader) {
-            table.push(
-              ['Bundler service', chalk.cyan(uploadCfg.uploader)],
-              ['Uploader type', chalk.cyan(uploadCfg['uploader-type'])],
-            )
-          }
-
-          if (bundlerLink) {
-            table.push(['Bundler link', chalk.yellow(bundlerLink)])
-          }
-
-          table.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
-
-          const successMessage = boxen(
-            `${chalk.green.bold('Upload successful!')}\n\n${table.toString()}`,
-            {
-              borderColor: 'green',
-              borderStyle: 'round',
-              padding: 1,
-              title: chalk.bold('Permaweb Deploy'),
-              titleAlignment: 'center',
-            },
-          )
-
-          this.log(`\n${successMessage}`)
+        const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
+        if (uploadSize) {
+          rows.push(['Upload size', chalk.blue(formatUploadSize(uploadSize))])
         }
+
+        if (uploadResult.cost) {
+          rows.push(['Upload cost', chalk.blue(formatUploadCost(uploadResult.cost))])
+        }
+
+        if (uploadCfg.uploader) {
+          rows.push(
+            ['Bundler service', chalk.cyan(uploadCfg.uploader)],
+            ['Uploader type', chalk.cyan(uploadCfg['uploader-type'])],
+          )
+        }
+
+        if (bundlerLink) {
+          rows.push(['Bundler link', chalk.yellow(bundlerLink)])
+        }
+
+        rows.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
+
+        this.log(chalk.bold(chalk.green('Upload successful!')))
+        this.log(formatDisplayRows(rows))
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         const normalizedError = errorMessage.startsWith('Upload failed:')
@@ -194,7 +159,7 @@ export default class Upload extends Command {
           : errorMessage
 
         if (!process.env.CI && process.stdout.isTTY) {
-          this.log(`\n${uploadErrorTable(normalizedError)}`)
+          this.log(`\n${formatUploadError(normalizedError)}`)
           this.exit(1)
         }
 

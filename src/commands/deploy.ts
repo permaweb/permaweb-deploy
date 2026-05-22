@@ -3,18 +3,15 @@ import fs from 'node:fs'
 import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
 import { Command } from '@oclif/core'
 import { connect } from '@permaweb/aoconnect'
-import boxen from 'boxen'
-import chalk from 'chalk'
-// eslint-disable-next-line import/no-named-as-default
-import Table from 'cli-table3'
 import ora from 'ora'
 
 import { type DeployConfig, deployFlagConfigs } from '../constants/flags.js'
 import { promptAdvancedOptions } from '../prompts/arns.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
+import { chalk } from '../utils/chalk.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
-import { uploadErrorTable } from '../utils/display.js'
+import { type DisplayRow, formatDisplayRows, formatUploadError } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { expandPath } from '../utils/path.js'
 import { createSigner } from '../utils/signer.js'
@@ -44,7 +41,7 @@ export default class Deploy extends Command {
       const interactive = useArns && !flags['arns-name']
 
       if (interactive) {
-        this.log(chalk.cyan.bold('\nInteractive ArNS Deployment Mode\n'))
+        this.log(chalk.bold(chalk.cyan('\nInteractive ArNS Deployment Mode\n')))
       }
 
       const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
@@ -143,7 +140,7 @@ export default class Deploy extends Command {
         }
       }
 
-      this.log(chalk.cyan.bold('\nStarting deployment...\n'))
+      this.log(chalk.bold(chalk.cyan('\nStarting deployment...\n')))
       try {
         if (!deployConfig['use-arns']) {
           const { transactionId: txOrManifestId } = await runUploadWorkflow(
@@ -156,7 +153,6 @@ export default class Deploy extends Command {
 
           this.log('')
 
-          const isCI = Boolean(process.env.CI)
           const bundlerLink =
             deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
               ? hyperbeamBundlerLink(
@@ -166,53 +162,22 @@ export default class Deploy extends Command {
                 )
               : undefined
 
-          if (isCI) {
-            this.log('Deployment Successful!')
-            this.log('Tx ID: ' + txOrManifestId)
-            if (deployConfig.uploader) {
-              this.log('Bundler service: ' + deployConfig.uploader)
-              this.log('Uploader type: ' + deployConfig['uploader-type'])
-            }
-
-            if (bundlerLink) {
-              this.log('Bundler link: ' + bundlerLink)
-            }
-
-            this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
-          } else {
-            const table = new Table({
-              style: {
-                head: [],
-              },
-            })
-
-            table.push(
-              ['Tx ID', chalk.green(txOrManifestId)],
-              ...(deployConfig.uploader
-                ? ([
-                    ['Bundler service', chalk.cyan(deployConfig.uploader)],
-                    ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
-                  ] as [string, string][])
-                : []),
-              ...(bundlerLink
-                ? ([['Bundler link', chalk.yellow(bundlerLink)]] as [string, string][])
-                : []),
-              ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
+          const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
+          if (deployConfig.uploader) {
+            rows.push(
+              ['Bundler service', chalk.cyan(deployConfig.uploader)],
+              ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
             )
-
-            const successMessage = boxen(
-              `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
-              {
-                borderColor: 'green',
-                borderStyle: 'round',
-                padding: 1,
-                title: chalk.bold('Permaweb Deploy'),
-                titleAlignment: 'center',
-              },
-            )
-
-            this.log(`\n${successMessage}`)
           }
+
+          if (bundlerLink) {
+            rows.push(['Bundler link', chalk.yellow(bundlerLink)])
+          }
+
+          rows.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
+
+          this.log(chalk.bold(chalk.green('Deployment Successful!')))
+          this.log(formatDisplayRows(rows))
 
           return
         }
@@ -286,7 +251,6 @@ export default class Deploy extends Command {
 
         spinner.succeed('ANT record updated')
 
-        const isCI = Boolean(process.env.CI)
         const bundlerLink =
           deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
             ? hyperbeamBundlerLink(
@@ -296,63 +260,29 @@ export default class Deploy extends Command {
               )
             : undefined
 
-        if (isCI) {
-          this.log('Deployment Successful!')
-          this.log('Tx ID: ' + txOrManifestId)
-          if (deployConfig.uploader) {
-            this.log('Bundler service: ' + deployConfig.uploader)
-            this.log('Uploader type: ' + deployConfig['uploader-type'])
-          }
-
-          if (bundlerLink) {
-            this.log('Bundler link: ' + bundlerLink)
-          }
-
-          this.log('ArNS Name: ' + arnsName)
-          this.log('Undername: ' + deployConfig.undername)
-          this.log('ANT: ' + arnsNameRecord.processId)
-          this.log('ARIO Process: ' + arioProcess)
-          this.log('TTL Seconds: ' + deployConfig['ttl-seconds'])
-          this.log(`Arweave URL: https://arweave.net/${txOrManifestId}`)
-        } else {
-          const table = new Table({
-            style: {
-              head: [],
-            },
-          })
-
-          table.push(
-            ['Tx ID', chalk.green(txOrManifestId)],
-            ...(deployConfig.uploader
-              ? ([
-                  ['Bundler service', chalk.cyan(deployConfig.uploader)],
-                  ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
-                ] as [string, string][])
-              : []),
-            ...(bundlerLink
-              ? ([['Bundler link', chalk.yellow(bundlerLink)]] as [string, string][])
-              : []),
-            ['ArNS Name', chalk.yellow(arnsName)],
-            ['Undername', chalk.yellow(deployConfig.undername)],
-            ['ANT', chalk.cyan(arnsNameRecord.processId)],
-            ['ARIO Process', chalk.gray(arioProcess)],
-            ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
-            ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
+        const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
+        if (deployConfig.uploader) {
+          rows.push(
+            ['Bundler service', chalk.cyan(deployConfig.uploader)],
+            ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
           )
-
-          const successMessage = boxen(
-            `${chalk.green.bold('Deployment Successful!')}\n\n${table.toString()}`,
-            {
-              borderColor: 'green',
-              borderStyle: 'round',
-              padding: 1,
-              title: chalk.bold('Permaweb Deploy'),
-              titleAlignment: 'center',
-            },
-          )
-
-          this.log(`\n${successMessage}`)
         }
+
+        if (bundlerLink) {
+          rows.push(['Bundler link', chalk.yellow(bundlerLink)])
+        }
+
+        rows.push(
+          ['ArNS Name', chalk.yellow(arnsName)],
+          ['Undername', chalk.yellow(deployConfig.undername)],
+          ['ANT', chalk.cyan(arnsNameRecord.processId)],
+          ['ARIO Process', chalk.gray(arioProcess)],
+          ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
+          ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
+        )
+
+        this.log(chalk.bold(chalk.green('Deployment Successful!')))
+        this.log(formatDisplayRows(rows))
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
         const normalizedError = errorMessage.startsWith('Upload failed:')
@@ -360,7 +290,7 @@ export default class Deploy extends Command {
           : errorMessage
 
         if (errorMessage.startsWith('Upload failed:') && !process.env.CI && process.stdout.isTTY) {
-          this.log(`\n${uploadErrorTable(normalizedError, 'Deployment failed')}`)
+          this.log(`\n${formatUploadError(normalizedError, 'Deployment failed')}`)
           this.exit(1)
         }
 

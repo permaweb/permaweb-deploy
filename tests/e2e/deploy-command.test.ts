@@ -1,6 +1,6 @@
 import { runCommand } from '@oclif/test'
 import { http, HttpResponse } from 'msw'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import { TEST_ETH_PRIVATE_KEY } from '../constants.js'
 import { mockInsufficientBalance } from '../mocks/turbo-handlers.js'
@@ -9,18 +9,6 @@ import { server } from '../setup.js'
 describe(
   'deploy command',
   () => {
-    beforeAll(() => {
-      server.listen({ onUnhandledRequest: 'warn' })
-    })
-
-    afterEach(() => {
-      server.resetHandlers()
-    })
-
-    afterAll(() => {
-      server.close()
-    })
-
     it('should show deploy help message', async () => {
       const result = await runCommand(['deploy', '--help'])
       expect(result.error).toBeUndefined()
@@ -28,6 +16,19 @@ describe(
 
     it('should show upload help message', async () => {
       const result = await runCommand(['upload', '--help'])
+      expect(result.error).toBeUndefined()
+    })
+
+    it('should deploy without requiring ArNS by default', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--no-dedupe',
+      ])
+
       expect(result.error).toBeUndefined()
     })
 
@@ -144,6 +145,23 @@ describe(
     })
 
     describe('hyperbeam uploader', () => {
+      beforeEach(() => {
+        server.use(
+          http.get('https://hyperbeam.test/~meta@1.0/info/address', () =>
+            HttpResponse.text('node-deposit-address'),
+          ),
+          http.get('https://hyperbeam.test/~meta@1.0/info/ao-payment-deposit-address', () =>
+            HttpResponse.text('node-deposit-address'),
+          ),
+          http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
+            HttpResponse.text('1'),
+          ),
+          http.get('https://hyperbeam.test/~arweave-byte-pricing@1.0/quote', () =>
+            HttpResponse.text('1000'),
+          ),
+        )
+      })
+
       it('should upload a file through a HyperBEAM bundler route', async () => {
         const seenUploads: Array<{ contentType: string; size: number }> = []
 
@@ -198,9 +216,6 @@ describe(
 
       it('should include AO funding metadata when a HyperBEAM upload needs payment', async () => {
         server.use(
-          http.get('https://hyperbeam.test/~meta@1.0/info/address', () =>
-            HttpResponse.text('node-deposit-address'),
-          ),
           http.post('https://hyperbeam.test/~bundler@1.0/item', () =>
             HttpResponse.text('insufficient local ledger balance', { status: 402 }),
           ),
@@ -222,6 +237,38 @@ describe(
         expect(result.error).toBeDefined()
         expect(result.error?.message).toContain('node-deposit-address')
         expect(result.error?.message).toContain('default')
+      })
+
+      it('should reject HyperBEAM uploads when the bundler wallet has no AR', async () => {
+        let uploadAttempted = false
+
+        server.use(
+          http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
+            HttpResponse.text('0'),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () => {
+            uploadAttempted = true
+            return HttpResponse.text('should not upload', { status: 200 })
+          }),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('has 0 AR')
+        expect(result.error?.message).toContain('cannot seed data to Arweave')
+        expect(uploadAttempted).toBe(false)
       })
     })
 

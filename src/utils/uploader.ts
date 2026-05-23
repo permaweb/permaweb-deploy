@@ -261,6 +261,7 @@ export async function uploadFolder(
       tags: [
         { name: 'App-Name', value: 'Permaweb-Deploy' },
         { name: 'Content-Type', value: 'application/x.arweave-manifest+json' },
+        { name: 'Device', value: 'manifest@1.0' },
       ],
     },
     fileSizeFactory: () => manifestBuffer.length,

@@ -26,9 +26,9 @@ importers:
       '@permaweb/aoconnect':
         specifier: ^0.0.85
         version: 0.0.85(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      hyperbalance:
-        specifier: github:xylophonez/hyperbalance#main
-        version: https://codeload.github.com/xylophonez/hyperbalance/tar.gz/dcb009349368197c88586e4eba784bb5290203cb
+      '@permaweb/hyperbalance':
+        specifier: ^0.1.0
+        version: 0.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       mime-types:
         specifier: ^3.0.1
         version: 3.0.2
@@ -1335,6 +1335,9 @@ packages:
     resolution: {integrity: sha512-IHnV6A+zxU7XwmKFinmYjUcwlyK9+xkG3/s9KcQhI9BjQKycrJ1JRO+FbNYPwZiPKW3je/DR0k7w8/gLa5eaxQ==}
     deprecated: 'The package is now available as "qr": npm install qr'
 
+  '@permaweb/ao-core-libs@0.0.9':
+    resolution: {integrity: sha512-ad7fS01bSkkCb0Tw61n2PqhCmEz87dFRFrU9yXewiWvyUqb75EqHi6yCBml+FyOKC4tcnezJqRGiKywSY4Q8Ew==}
+
   '@permaweb/ao-scheduler-utils@0.0.29':
     resolution: {integrity: sha512-tzuNsy2NUcATLMG+SKaO1PxbXaDpfoQikEfI7BABkNWk6AyQoBLy0Zwuu0eypGEHeNP6gugXEo1j8oZez/8fXA==}
     engines: {node: '>=18'}
@@ -1349,6 +1352,14 @@ packages:
 
   '@permaweb/aoconnect@0.0.85':
     resolution: {integrity: sha512-lPfDLDaQyOY1oupxkw9B9ZslKw1ENASEdzComoMc2RZ7DejBx2OdHzU+fmZO1ZEQ5zQSm82/wgRVBd/1l6092g==}
+    engines: {node: '>=18'}
+
+  '@permaweb/aoconnect@0.0.96':
+    resolution: {integrity: sha512-0Xfjlt3T4J6SV6YFu9tMyM5fVq/yImjRZGVsZWGKBbboZU8SZ5HlgC+JenjJs9u/MaU1pecyhbofa7sITdebwQ==}
+    engines: {node: '>=18'}
+
+  '@permaweb/hyperbalance@0.1.0':
+    resolution: {integrity: sha512-lg2s4RpEk5UTEzjx4ErIclMZ9zIlAmkesv/PZHxO7xZ/083uQ3wfMaQCi40LbYONlJrzIapA12s6uA74YM6VqQ==}
     engines: {node: '>=18'}
 
   '@permaweb/protocol-tag-utils@0.0.2':
@@ -3015,6 +3026,9 @@ packages:
   confusing-browser-globals@1.0.11:
     resolution: {integrity: sha512-JsPKdmh8ZkmnHxDk55FZ1TqVLvEQTvoByJZRN9jzI0UjxK/QgAmsphz7PGtqgPieQZ/CQcHWXCR7ATDNhGe+YA==}
 
+  constants-browserify@1.0.0:
+    resolution: {integrity: sha512-xFxOwqIzR/e1k1gLiWEophSCMqXcwVHIH7akf7b/vxcUeGunlj3hvZaaqxwHsTgn+IndtkQJgSztIDWeumWJDQ==}
+
   conventional-changelog-angular@7.0.0:
     resolution: {integrity: sha512-ROjNchA9LgfNMTTFSIWPzebCwOGFdgkEq45EnvvrmSLvCtAw0HSmrCs7/ty+wAeYUZyNay0YMUNYFTRL72PkBQ==}
     engines: {node: '>=16'}
@@ -3894,11 +3908,6 @@ packages:
 
   hyper-async@1.2.0:
     resolution: {integrity: sha512-7wvJxzAEBREKotXGuHOSri8/J+D0oURqCbNmn8g7Ym8hVMJQkGCMMS9y2/GktMtRyxPVcw2xWFh2oPa970PmXQ==}
-    engines: {node: '>=18'}
-
-  hyperbalance@https://codeload.github.com/xylophonez/hyperbalance/tar.gz/dcb009349368197c88586e4eba784bb5290203cb:
-    resolution: {tarball: https://codeload.github.com/xylophonez/hyperbalance/tar.gz/dcb009349368197c88586e4eba784bb5290203cb}
-    version: 0.1.0
     engines: {node: '>=18'}
 
   iconv-lite@0.7.2:
@@ -7877,6 +7886,19 @@ snapshots:
 
   '@paulmillr/qr@0.2.1': {}
 
+  '@permaweb/ao-core-libs@0.0.9(bufferutil@4.1.0)(debug@4.4.3)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@dha-team/arbundles': 1.0.4(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      axios: 1.13.6(debug@4.4.3)
+      constants-browserify: 1.0.0
+      http-message-signatures: 1.0.4
+      structured-headers: 2.0.2
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
   '@permaweb/ao-scheduler-utils@0.0.29':
     dependencies:
       lru-cache: 10.4.3
@@ -7926,6 +7948,37 @@ snapshots:
       ramda: 0.30.1
       structured-headers: 2.0.2
       zod: 3.25.76
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+
+  '@permaweb/aoconnect@0.0.96(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@dha-team/arbundles': 1.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      '@permaweb/ao-core-libs': 0.0.9(bufferutil@4.1.0)(debug@4.4.3)(utf-8-validate@6.0.6)
+      '@permaweb/ao-scheduler-utils': 0.0.29
+      '@permaweb/protocol-tag-utils': 0.0.2
+      axios: 1.13.6(debug@4.4.3)
+      base64url: 3.0.1
+      buffer: 6.0.3
+      debug: 4.4.3(supports-color@10.2.2)
+      http-message-signatures: 1.0.4
+      hyper-async: 1.2.0
+      mnemonist: 0.39.8
+      ramda: 0.30.1
+      structured-headers: 2.0.2
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+
+  '@permaweb/hyperbalance@0.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@permaweb/aoconnect': 0.0.96(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -10452,6 +10505,8 @@ snapshots:
 
   confusing-browser-globals@1.0.11: {}
 
+  constants-browserify@1.0.0: {}
+
   conventional-changelog-angular@7.0.0:
     dependencies:
       compare-func: 2.0.0
@@ -11586,8 +11641,6 @@ snapshots:
   husky@9.1.7: {}
 
   hyper-async@1.2.0: {}
-
-  hyperbalance@https://codeload.github.com/xylophonez/hyperbalance/tar.gz/dcb009349368197c88586e4eba784bb5290203cb: {}
 
   iconv-lite@0.7.2:
     dependencies:

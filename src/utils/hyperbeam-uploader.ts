@@ -14,7 +14,7 @@ import {
   HYPERBEAM_DEFAULT_LEDGER_ID,
   HYPERBEAM_DEFAULT_LEDGER_ROUTE,
   waitForAoAssignmentSlot,
-} from 'hyperbalance'
+} from '@permaweb/hyperbalance'
 
 const require = createRequire(import.meta.url)
 const { ArweaveSigner, DataItem, createData } = require('@dha-team/arbundles') as {

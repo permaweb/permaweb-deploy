@@ -1,51 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  validateArioProcess,
-  validateArnsName,
   validateFileExists,
   validateFolderExists,
-  validateTtl,
+  validateName,
 } from '../../src/utils/validators.js'
 
 describe('Validator Unit Tests', () => {
-  describe('validateArnsName', () => {
-    it('should accept valid arns names', () => {
-      expect(validateArnsName('my-app')).toBe(true)
-      expect(validateArnsName('test123')).toBe(true)
-      expect(validateArnsName('a')).toBe(true)
+  describe('validateName', () => {
+    it('should accept valid names', () => {
+      expect(validateName('my-app')).toBe(true)
+      expect(validateName('test123')).toBe(true)
+      expect(validateName('a')).toBe(true)
     })
 
-    it('should reject empty arns names', () => {
-      expect(validateArnsName('')).toBe('ArNS name is required')
-    })
-  })
-
-  describe('validateTtl', () => {
-    it('should accept valid ttl values', () => {
-      expect(validateTtl('60')).toBe(true)
-      expect(validateTtl('3600')).toBe(true)
-      expect(validateTtl('86400')).toBe(true)
-    })
-
-    it('should reject invalid ttl values', () => {
-      expect(validateTtl('59')).toBe('TTL must be between 60 and 86400 seconds')
-      expect(validateTtl('86401')).toBe('TTL must be between 60 and 86400 seconds')
-      expect(validateTtl('abc')).toBe('TTL must be a valid number')
-      expect(validateTtl('-100')).toBe('TTL must be between 60 and 86400 seconds')
-    })
-  })
-
-  describe('validateArioProcess', () => {
-    it('should accept valid arweave transaction IDs', () => {
-      const validId = 'xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10'
-      expect(validateArioProcess(validId)).toBe(true)
-    })
-
-    it('should reject invalid transaction IDs', () => {
-      expect(validateArioProcess('short')).toMatch(/valid Arweave transaction ID/)
-      expect(validateArioProcess('')).toMatch(/valid Arweave transaction ID/)
-      expect(validateArioProcess('a'.repeat(50))).toMatch(/valid Arweave transaction ID/)
+    it('should reject empty names', () => {
+      expect(validateName('')).toBe('Namespace name is required')
     })
   })
 

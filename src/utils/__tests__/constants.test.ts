@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ARWEAVE_TX_ID_REGEX, TTL_MAX, TTL_MIN } from '../constants.js'
+import { ARWEAVE_TX_ID_REGEX } from '../constants.js'
 
 describe('constants', () => {
   describe('ARWEAVE_TX_ID_REGEX', () => {
@@ -27,13 +27,6 @@ describe('constants', () => {
       for (const id of invalidIds) {
         expect(ARWEAVE_TX_ID_REGEX.test(id)).toBe(false)
       }
-    })
-  })
-
-  describe('TTL constants', () => {
-    it('should have correct TTL bounds', () => {
-      expect(TTL_MIN).toBe(60)
-      expect(TTL_MAX).toBe(86_400)
     })
   })
 })

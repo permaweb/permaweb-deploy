@@ -1,19 +1,10 @@
-import { ARIO_MAINNET_PROCESS_ID } from '@ar.io/sdk'
 import { Flags } from '@oclif/core'
 
-import { promptArioProcess, promptArnsName } from '../prompts/arns.js'
 import { promptDeployTarget } from '../prompts/deployment.js'
+import { promptName } from '../prompts/names.js'
 import { promptSignerType } from '../prompts/wallet.js'
 import { createFlagConfig, type ResolvedConfig } from '../utils/config-resolver.js'
-import { TTL_MAX, TTL_MIN } from '../utils/constants.js'
-import {
-  resolveArioProcess,
-  validateArioProcess,
-  validateFileExists,
-  validateFolderExists,
-  validateTtl,
-  validateUndername,
-} from '../utils/validators.js'
+import { validateFileExists, validateFolderExists, validateName } from '../utils/validators.js'
 import { DEFAULT_CACHE_MAX_ENTRIES } from './cache.js'
 
 /**
@@ -21,32 +12,6 @@ import { DEFAULT_CACHE_MAX_ENTRIES } from './cache.js'
  * Each flag includes its oclif definition and optional prompt function
  */
 export const globalFlags = {
-  arioProcess: createFlagConfig<string>({
-    flag: Flags.string({
-      char: 'p',
-      default: ARIO_MAINNET_PROCESS_ID,
-      description: 'The ARIO process to use (mainnet, testnet, or process ID)',
-      async parse(input) {
-        const validation = validateArioProcess(input)
-        if (validation !== true) {
-          throw new Error(validation)
-        }
-
-        return resolveArioProcess(input)
-      },
-      required: false,
-    }),
-    prompt: promptArioProcess,
-  }),
-  arnsName: createFlagConfig<string>({
-    flag: Flags.string({
-      char: 'n',
-      description: 'The ArNS name to deploy to',
-      required: false,
-    }),
-    prompt: promptArnsName,
-    triggersInteractive: true,
-  }),
   dedupeCacheMaxEntries: createFlagConfig<number>({
     flag: Flags.integer({
       default: DEFAULT_CACHE_MAX_ENTRIES,
@@ -133,10 +98,46 @@ export const globalFlags = {
       required: false,
     }),
   }),
-  // Advanced payment settings
-  maxTokenAmount: createFlagConfig<string | undefined>({
+  name: createFlagConfig<string>({
     flag: Flags.string({
-      description: 'Maximum token amount for on-demand payment',
+      char: 'n',
+      description: 'Namespace name to update with the deployed transaction ID',
+      async parse(input) {
+        const validation = validateName(input)
+        if (validation !== true) {
+          throw new Error(validation)
+        }
+
+        return input
+      },
+      required: false,
+    }),
+    prompt: promptName,
+    triggersInteractive: true,
+  }),
+  namesBundler: createFlagConfig<string>({
+    flag: Flags.string({
+      default: 'https://up.arweave.net',
+      description: 'Bundler endpoint used to publish names reference updates.',
+      required: false,
+    }),
+  }),
+  namesGateway: createFlagConfig<string>({
+    flag: Flags.string({
+      default: 'https://arweave.net',
+      description: 'Gateway used for names reference and namespace reads.',
+      required: false,
+    }),
+  }),
+  namesGraphql: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'GraphQL endpoint used for names reference discovery.',
+      required: false,
+    }),
+  }),
+  namesNamespace: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Namespace root reference or manifest ID used to resolve --name.',
       required: false,
     }),
   }),
@@ -147,18 +148,17 @@ export const globalFlags = {
       required: false,
     }),
   }),
-  onDemand: createFlagConfig<string | undefined>({
-    flag: Flags.string({
-      description: 'Enable on-demand payment with specified token (ario or base-eth)',
-      options: ['ario', 'base-eth'],
-      required: false,
-    }),
-  }),
   privateKey: createFlagConfig<string | undefined>({
     flag: Flags.string({
       char: 'k',
       description: 'Private key or JWK JSON string (alternative to --wallet)',
       exclusive: ['wallet'],
+      required: false,
+    }),
+  }),
+  referenceId: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Reference ID to update directly, bypassing namespace name lookup.',
       required: false,
     }),
   }),
@@ -171,38 +171,6 @@ export const globalFlags = {
       required: false,
     }),
     prompt: promptSignerType,
-  }),
-  ttlSeconds: createFlagConfig<string>({
-    flag: Flags.string({
-      char: 't',
-      default: '60',
-      description: `ArNS TTL in seconds (${TTL_MIN}-${TTL_MAX})`,
-      async parse(input) {
-        const validation = validateTtl(input)
-        if (validation !== true) {
-          throw new Error(validation)
-        }
-
-        return input
-      },
-      required: false,
-    }),
-  }),
-  undername: createFlagConfig<string>({
-    flag: Flags.string({
-      char: 'u',
-      default: '@',
-      description: 'ANT undername to update',
-      async parse(input) {
-        const validation = validateUndername(input)
-        if (validation !== true) {
-          throw new Error(validation)
-        }
-
-        return input
-      },
-      required: false,
-    }),
   }),
   uploader: createFlagConfig<string | undefined>({
     flag: Flags.string({
@@ -220,10 +188,10 @@ export const globalFlags = {
       required: false,
     }),
   }),
-  useArns: createFlagConfig<boolean>({
+  useNames: createFlagConfig<boolean>({
     flag: Flags.boolean({
       default: false,
-      description: 'Update an ArNS/ANT record after upload.',
+      description: 'Update a names-sdk namespace reference after upload.',
       required: false,
     }),
   }),
@@ -249,8 +217,6 @@ export const globalFlags = {
  * Complete set of flags for the deploy command
  */
 export const deployFlags = {
-  'ario-process': globalFlags.arioProcess.flag,
-  'arns-name': globalFlags.arnsName.flag,
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries.flag,
   'deploy-file': globalFlags.deployFile.flag,
   'deploy-folder': globalFlags.deployFolder.flag,
@@ -260,27 +226,32 @@ export const deployFlags = {
   'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId.flag,
   'hyperbeam-token-id': globalFlags.hyperbeamTokenId.flag,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath.flag,
-  'max-token-amount': globalFlags.maxTokenAmount.flag,
+  name: globalFlags.name.flag,
+  'names-bundler': globalFlags.namesBundler.flag,
+  'names-gateway': globalFlags.namesGateway.flag,
+  'names-graphql': globalFlags.namesGraphql.flag,
+  'names-namespace': globalFlags.namesNamespace.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
-  'on-demand': globalFlags.onDemand.flag,
   'private-key': globalFlags.privateKey.flag,
+  'reference-id': globalFlags.referenceId.flag,
   'sig-type': globalFlags.sigType.flag,
-  'ttl-seconds': globalFlags.ttlSeconds.flag,
-  undername: globalFlags.undername.flag,
   uploader: globalFlags.uploader.flag,
   'uploader-type': globalFlags.uploaderType.flag,
-  'use-arns': globalFlags.useArns.flag,
+  'use-names': globalFlags.useNames.flag,
   wallet: globalFlags.wallet.flag,
 }
 
 /**
- * ArNS-specific flags (subset of deploy flags)
+ * Names-specific flags (subset of deploy flags)
  */
-export const arnsFlags = {
-  'ario-process': globalFlags.arioProcess.flag,
-  'arns-name': globalFlags.arnsName.flag,
-  'ttl-seconds': globalFlags.ttlSeconds.flag,
-  undername: globalFlags.undername.flag,
+export const namesFlags = {
+  name: globalFlags.name.flag,
+  'names-bundler': globalFlags.namesBundler.flag,
+  'names-gateway': globalFlags.namesGateway.flag,
+  'names-graphql': globalFlags.namesGraphql.flag,
+  'names-namespace': globalFlags.namesNamespace.flag,
+  'reference-id': globalFlags.referenceId.flag,
+  'use-names': globalFlags.useNames.flag,
 }
 
 /**
@@ -296,8 +267,6 @@ export const walletFlags = {
  * Deploy command configuration type
  */
 export interface DeployConfig {
-  'ario-process': string
-  'arns-name'?: string
   'dedupe-cache-max-entries': number
   'deploy-file'?: string
   'deploy-folder': string
@@ -307,14 +276,16 @@ export interface DeployConfig {
   'hyperbeam-ledger-id'?: string
   'hyperbeam-token-id'?: string
   'hyperbeam-upload-path': string
-  'max-token-amount'?: string
+  name?: string
+  'names-bundler': string
+  'names-gateway': string
+  'names-graphql'?: string
+  'names-namespace'?: string
   'no-dedupe': boolean
-  'on-demand'?: string
   'private-key'?: string
+  'reference-id'?: string
   'sig-type': string
-  'ttl-seconds': string
-  undername: string
-  'use-arns': boolean
+  'use-names': boolean
   uploader?: string
   'uploader-type': string
   wallet?: string
@@ -325,8 +296,6 @@ export interface DeployConfig {
  * Maps kebab-case flag names to their camelCase globalFlags definitions
  */
 export const deployFlagConfigs = {
-  'ario-process': globalFlags.arioProcess,
-  'arns-name': globalFlags.arnsName,
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
   'deploy-file': globalFlags.deployFile,
   'deploy-folder': globalFlags.deployFolder,
@@ -336,21 +305,23 @@ export const deployFlagConfigs = {
   'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId,
   'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
-  'max-token-amount': globalFlags.maxTokenAmount,
+  name: globalFlags.name,
+  'names-bundler': globalFlags.namesBundler,
+  'names-gateway': globalFlags.namesGateway,
+  'names-graphql': globalFlags.namesGraphql,
+  'names-namespace': globalFlags.namesNamespace,
   'no-dedupe': globalFlags.noDedupe,
-  'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
+  'reference-id': globalFlags.referenceId,
   'sig-type': globalFlags.sigType,
-  'ttl-seconds': globalFlags.ttlSeconds,
-  undername: globalFlags.undername,
   uploader: globalFlags.uploader,
   'uploader-type': globalFlags.uploaderType,
-  'use-arns': globalFlags.useArns,
+  'use-names': globalFlags.useNames,
   wallet: globalFlags.wallet,
 } as const
 
 /**
- * Upload command — file/folder to Arweave via Turbo without updating ArNS
+ * Upload command — file/folder to Arweave via Turbo without updating names
  */
 export const uploadFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,
@@ -362,9 +333,7 @@ export const uploadFlagConfigs = {
   'hyperbeam-ledger-id': globalFlags.hyperbeamLedgerId,
   'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
-  'max-token-amount': globalFlags.maxTokenAmount,
   'no-dedupe': globalFlags.noDedupe,
-  'on-demand': globalFlags.onDemand,
   'private-key': globalFlags.privateKey,
   'sig-type': globalFlags.sigType,
   uploader: globalFlags.uploader,

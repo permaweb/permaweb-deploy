@@ -3,14 +3,16 @@ import type { Flag } from '@oclif/core/lib/interfaces'
 export type SignerType = 'arweave' | 'ethereum' | 'kyve' | 'polygon'
 
 export interface DeployOptions {
-  'ario-process': string
-  'arns-name'?: string
   'deploy-file': string
   'deploy-folder': string
+  name?: string
+  'names-bundler': string
+  'names-gateway': string
+  'names-graphql'?: string
+  'names-namespace'?: string
   'private-key': string
+  'reference-id'?: string
   'sig-type': SignerType
-  'ttl-seconds': string
-  undername: string
   wallet: string
 }
 
@@ -26,8 +28,8 @@ export interface UploadResult {
   }
 }
 
-export interface ArnsRecord {
-  processId: string
-  type: string
-  undernames?: string[]
+export interface NamesReference {
+  name?: string
+  namespace: string
+  referenceId: string
 }

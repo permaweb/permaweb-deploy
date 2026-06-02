@@ -20,13 +20,13 @@ import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 export default class Upload extends Command {
   static override args = {}
 
-  static override description = 'Upload a file or folder to Arweave via Turbo without updating ArNS'
+  static override description =
+    'Upload a file or folder to Arweave via Turbo without updating names'
 
   static override examples = [
     '<%= config.bin %> upload --wallet ./wallet.json',
     '<%= config.bin %> upload --wallet ./wallet.json --deploy-folder ./dist',
     '<%= config.bin %> upload --wallet ./wallet.json --deploy-file ./dist/index.html',
-    '<%= config.bin %> upload --private-key "$(cat wallet.json)" --on-demand ario --max-token-amount 1.5',
     '<%= config.bin %> upload --wallet ./wallet.json --uploader https://up.arweave.net',
     '<%= config.bin %> upload --wallet ./wallet.json --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
   ]
@@ -74,8 +74,6 @@ export default class Upload extends Command {
         'hyperbeam-ledger-id': baseConfig['hyperbeam-ledger-id'],
         'hyperbeam-token-id': baseConfig['hyperbeam-token-id'],
         'hyperbeam-upload-path': baseConfig['hyperbeam-upload-path'],
-        'max-token-amount': baseConfig['max-token-amount'],
-        'on-demand': baseConfig['on-demand'],
         'sig-type': baseConfig['sig-type'],
         uploader: baseConfig.uploader,
         'uploader-type': baseConfig['uploader-type'],

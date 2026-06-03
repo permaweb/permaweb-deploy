@@ -100,6 +100,11 @@ export interface HyperbeamBundlerQuoteOptions {
   uploader: string
 }
 
+export interface HyperbeamDataItemPostResult {
+  body: string
+  id?: string
+}
+
 async function readableToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = []
 
@@ -142,6 +147,10 @@ function normalizeUploadUrl(base: string, uploadPath: string): string {
   const normalizedBase = base.endsWith('/') ? base : `${base}/`
   const cleanPath = uploadPath.startsWith('/') ? uploadPath.slice(1) : uploadPath
   return new URL(cleanPath, normalizedBase).toString()
+}
+
+export function hyperbeamUploadUrl(base: string, uploadPath: string): string {
+  return normalizeUploadUrl(base, uploadPath)
 }
 
 function arweaveAddressFromJwk(jwk: Record<string, unknown>): string {
@@ -344,6 +353,30 @@ function responseId(headers: Headers, body: string): string | undefined {
   }
 }
 
+export async function postHyperbeamDataItem(
+  uploadUrl: string,
+  raw: Buffer | Uint8Array,
+): Promise<HyperbeamDataItemPostResult> {
+  const res = await fetch(uploadUrl, {
+    body: raw,
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/octet-stream',
+    },
+    method: 'POST',
+  })
+  const body = await res.text()
+
+  if (!res.ok) {
+    const preview = responsePreview(body)
+    throw new Error(
+      `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+    )
+  }
+
+  return { body, id: responseId(res.headers, body) }
+}
+
 function cleanAutoFundErrorMessage(message: string): string {
   const jsonStart = message.indexOf('{')
   if (jsonStart >= 0) {
@@ -442,30 +475,16 @@ export class HyperbeamBundlerClient implements UploadClient {
       }
     }
 
-    const res = await fetch(this.uploadUrl, {
-      body: raw,
-      headers: {
-        accept: 'application/json, text/plain, */*',
-        'content-type': 'application/octet-stream',
-      },
-      method: 'POST',
-    })
-    const body = await res.text()
-
-    if (!res.ok) {
-      const preview = responsePreview(body)
-      const paymentHint = res.status === 402 ? await this.paymentHint() : undefined
-      throw new Error(
-        [
-          `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
-          paymentHint,
-        ]
-          .filter(Boolean)
-          .join('\n\n'),
-      )
+    let posted: HyperbeamDataItemPostResult
+    try {
+      posted = await postHyperbeamDataItem(this.uploadUrl, raw)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const paymentHint = message.includes('HTTP 402') ? await this.paymentHint() : undefined
+      throw new Error([message, paymentHint].filter(Boolean).join('\n\n'))
     }
 
-    return { cost, id: responseId(res.headers, body) || localId, size }
+    return { cost, id: posted.id || localId, size }
   }
 
   private async paymentHint(includeAutoFundInstruction = true): Promise<string | undefined> {

@@ -7,6 +7,8 @@ import { createFlagConfig, type ResolvedConfig } from '../utils/config-resolver.
 import { validateFileExists, validateFolderExists, validateName } from '../utils/validators.js'
 import { DEFAULT_CACHE_MAX_ENTRIES } from './cache.js'
 
+export const DEFAULT_LEGACY_UPLOADER = 'https://up.arweave.net'
+
 /**
  * Global flag definitions - single source of truth for all flags
  * Each flag includes its oclif definition and optional prompt function
@@ -115,13 +117,6 @@ export const globalFlags = {
     prompt: promptName,
     triggersInteractive: true,
   }),
-  namesBundler: createFlagConfig<string>({
-    flag: Flags.string({
-      default: 'https://up.arweave.net',
-      description: 'Bundler endpoint used to publish names reference updates.',
-      required: false,
-    }),
-  }),
   namesGateway: createFlagConfig<string>({
     flag: Flags.string({
       default: 'https://arweave.net',
@@ -175,23 +170,23 @@ export const globalFlags = {
   uploader: createFlagConfig<string | undefined>({
     flag: Flags.string({
       description:
-        'Base URL of the bundler service to use. For Turbo, omit for ArDrive production: https://upload.ardrive.io. For HyperBEAM, pass the node URL, for example https://hyperbeam.example.com.',
+        'Base URL of the bundler service to use. Legacy uploads default to https://up.arweave.net; HyperBEAM uploads require an explicit node URL.',
       required: false,
     }),
   }),
   uploaderType: createFlagConfig<string>({
     flag: Flags.string({
-      default: 'turbo',
+      default: 'legacy',
       description:
-        'Uploader protocol to use. turbo uses the Turbo bundler API; hyperbeam signs ANS-104 items and posts them to a HyperBEAM bundler route.',
-      options: ['turbo', 'hyperbeam'],
+        'Bundler protocol to use. legacy posts ANS-104 items to legacy upload endpoints; hyperbeam posts ANS-104 items to a HyperBEAM bundler route.',
+      options: ['legacy', 'hyperbeam'],
       required: false,
     }),
   }),
   useNames: createFlagConfig<boolean>({
     flag: Flags.boolean({
       default: false,
-      description: 'Update a names-sdk namespace reference after upload.',
+      description: 'Update a Permaweb Names reference after upload.',
       required: false,
     }),
   }),
@@ -227,7 +222,6 @@ export const deployFlags = {
   'hyperbeam-token-id': globalFlags.hyperbeamTokenId.flag,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath.flag,
   name: globalFlags.name.flag,
-  'names-bundler': globalFlags.namesBundler.flag,
   'names-gateway': globalFlags.namesGateway.flag,
   'names-graphql': globalFlags.namesGraphql.flag,
   'names-namespace': globalFlags.namesNamespace.flag,
@@ -246,7 +240,6 @@ export const deployFlags = {
  */
 export const namesFlags = {
   name: globalFlags.name.flag,
-  'names-bundler': globalFlags.namesBundler.flag,
   'names-gateway': globalFlags.namesGateway.flag,
   'names-graphql': globalFlags.namesGraphql.flag,
   'names-namespace': globalFlags.namesNamespace.flag,
@@ -277,7 +270,6 @@ export interface DeployConfig {
   'hyperbeam-token-id'?: string
   'hyperbeam-upload-path': string
   name?: string
-  'names-bundler': string
   'names-gateway': string
   'names-graphql'?: string
   'names-namespace'?: string
@@ -306,7 +298,6 @@ export const deployFlagConfigs = {
   'hyperbeam-token-id': globalFlags.hyperbeamTokenId,
   'hyperbeam-upload-path': globalFlags.hyperbeamUploadPath,
   name: globalFlags.name,
-  'names-bundler': globalFlags.namesBundler,
   'names-gateway': globalFlags.namesGateway,
   'names-graphql': globalFlags.namesGraphql,
   'names-namespace': globalFlags.namesNamespace,
@@ -321,7 +312,7 @@ export const deployFlagConfigs = {
 } as const
 
 /**
- * Upload command — file/folder to Arweave via Turbo without updating names
+ * Upload command — file/folder to Arweave without updating names
  */
 export const uploadFlagConfigs = {
   'dedupe-cache-max-entries': globalFlags.dedupeCacheMaxEntries,

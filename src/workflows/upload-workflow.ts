@@ -2,11 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import {
-  ARIOToTokenAmount,
-  ETHToTokenAmount,
-  OnDemandFunding,
-  TurboAuthenticatedConfiguration,
-  TurboFactory,
+  TurboAuthenticatedConfiguration as LegacyAuthenticatedConfiguration,
+  TurboFactory as LegacyFactory,
 } from '@ardrive/turbo-sdk'
 import ora from 'ora'
 
@@ -35,8 +32,6 @@ export interface UploadWorkflowConfig {
   'hyperbeam-ledger-id'?: string
   'hyperbeam-token-id'?: string
   'hyperbeam-upload-path'?: string
-  'max-token-amount'?: string
-  'on-demand'?: string
   'sig-type': string
   uploader?: string
   'uploader-type'?: string
@@ -66,10 +61,10 @@ export interface UploadWorkflowResult {
 }
 
 /**
- * Sign in to Turbo and upload a file or folder.
+ * Sign and upload a file or folder.
  *
  * @param deployKey - Wallet material (base64 JWK or hex private key per sig-type)
- * @param config - Upload paths, dedupe, bundler service URL, on-demand payment
+ * @param config - Upload paths, dedupe, and bundler service URL.
  * @param io - Error handler (must exit the process)
  * @returns Transaction ID or folder manifest ID
  */
@@ -80,9 +75,9 @@ export async function runUploadWorkflow(
 ): Promise<UploadWorkflowResult> {
   const spinner = ora()
 
-  const uploaderType = config['uploader-type'] ?? 'turbo'
+  const uploaderType = config['uploader-type'] ?? 'legacy'
   let uploadClient: UploadClient
-  let turbo: ReturnType<typeof TurboFactory.authenticated> | undefined
+  let legacyClient: ReturnType<typeof LegacyFactory.authenticated> | undefined
 
   if (uploaderType === 'hyperbeam') {
     if (config['sig-type'] !== 'arweave') {
@@ -91,10 +86,6 @@ export async function runUploadWorkflow(
 
     if (!config.uploader) {
       io.error('HyperBEAM uploads require --uploader <node-url>')
-    }
-
-    if (config['on-demand']) {
-      io.error('HyperBEAM uploads do not support Turbo --on-demand payments')
     }
 
     let autoFund: HyperbeamBundlerAutoFundOptions | undefined
@@ -129,50 +120,22 @@ export async function runUploadWorkflow(
     const { signer, token } = createSigner(config['sig-type'] as SignerType, deployKey)
     spinner.succeed(`Signer created (${chalk.cyan(config['sig-type'])})`)
 
-    spinner.start('Initializing Turbo')
+    spinner.start('Initializing legacy bundler')
 
-    const turboFactoryArgs: TurboAuthenticatedConfiguration = { signer, token }
+    const legacyFactoryArgs: LegacyAuthenticatedConfiguration = { signer, token }
 
     if (config.uploader) {
-      turboFactoryArgs.uploadServiceConfig = { url: config.uploader }
+      legacyFactoryArgs.uploadServiceConfig = { url: config.uploader }
     }
 
-    turbo = TurboFactory.authenticated(turboFactoryArgs)
-    uploadClient = turbo as UploadClient
+    legacyClient = LegacyFactory.authenticated(legacyFactoryArgs)
+    uploadClient = legacyClient as UploadClient
 
-    spinner.succeed('Turbo initialized')
+    spinner.succeed('Legacy bundler initialized')
   }
 
-  let fundingMode: OnDemandFunding | undefined
-  if (config['on-demand'] && config['max-token-amount']) {
-    const tokenType = config['on-demand']
-    const maxAmount = Number.parseFloat(config['max-token-amount'])
-
-    let maxTokenAmount: ReturnType<typeof ARIOToTokenAmount>
-    switch (tokenType) {
-      case 'ario': {
-        maxTokenAmount = ARIOToTokenAmount(maxAmount)
-        break
-      }
-
-      case 'base-eth': {
-        maxTokenAmount = ETHToTokenAmount(maxAmount)
-        break
-      }
-
-      default: {
-        throw new Error(`Unsupported on-demand token type: ${tokenType}`)
-      }
-    }
-
-    fundingMode = new OnDemandFunding({
-      maxTokenAmount,
-      topUpBufferMultiplier: 1.1,
-    })
-  }
-
-  if (!fundingMode && turbo) {
-    spinner.start('Checking Turbo credits for upload')
+  if (legacyClient) {
+    spinner.start('Checking legacy bundler credits for upload')
 
     try {
       const uploadBytes = config['deploy-file']
@@ -188,32 +151,32 @@ export async function runUploadWorkflow(
       const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
 
       if (uploadBytes >= FREE_THRESHOLD_BYTES) {
-        const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
-        const balance = await turbo.getBalance()
+        const [uploadCost] = await legacyClient.getUploadCosts({ bytes: [uploadBytes] })
+        const balance = await legacyClient.getBalance()
 
         const requiredWinc = BigInt(uploadCost.winc)
         const currentWinc = BigInt(balance.winc)
 
         if (requiredWinc > currentWinc) {
-          spinner.fail('Insufficient Turbo credits')
+          spinner.fail('Insufficient legacy bundler credits')
 
           io.error(
             [
-              'Insufficient Turbo credits for this upload.',
+              'Insufficient legacy bundler credits for this upload.',
               `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
               '',
-              'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
+              'Add bundler credits before retrying.',
             ].join(' '),
           )
         }
       }
 
-      spinner.succeed('Turbo credits check passed')
+      spinner.succeed('Legacy bundler credits check passed')
     } catch (balanceError) {
-      spinner.fail('Failed to check Turbo credits')
+      spinner.fail('Failed to check legacy bundler credits')
       const errorMessage =
         balanceError instanceof Error ? balanceError.message : String(balanceError)
-      io.error(`Failed to check Turbo credits: ${errorMessage}`)
+      io.error(`Failed to check legacy bundler credits: ${errorMessage}`)
     }
   }
 
@@ -226,7 +189,7 @@ export async function runUploadWorkflow(
       spinner.start(`Uploading file ${chalk.yellow(config['deploy-file'])}`)
 
       let cache = config['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-      const uploadResult = await uploadFile(uploadClient, filePath, { cache, fundingMode })
+      const uploadResult = await uploadFile(uploadClient, filePath, { cache })
 
       if (!uploadResult.transactionId) {
         spinner.fail('File upload failed: no transaction ID returned')
@@ -257,7 +220,6 @@ export async function runUploadWorkflow(
       const uploadResult: FolderUploadResult = await uploadFolder(uploadClient, folderPath, {
         cache,
         concurrency: config['hyperbeam-auto-fund'] ? 1 : undefined,
-        fundingMode,
         throwOnFailure: true,
       })
 

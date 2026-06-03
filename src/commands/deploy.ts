@@ -3,14 +3,18 @@ import fs from 'node:fs'
 import { Command } from '@oclif/core'
 import ora from 'ora'
 
-import { type DeployConfig, deployFlagConfigs } from '../constants/flags.js'
+import {
+  DEFAULT_LEGACY_UPLOADER,
+  type DeployConfig,
+  deployFlagConfigs,
+} from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
 import { chalk } from '../utils/chalk.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { type DisplayRow, formatDisplayRows, formatUploadError } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
-import { publishNamesUpdate } from '../utils/names.js'
+import { preflightNamesUpdate, publishNamesUpdate } from '../utils/names.js'
 import { expandPath } from '../utils/path.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 
@@ -66,6 +70,9 @@ export default class Deploy extends Command {
       const effectiveCacheMaxEntries = baseConfig['no-dedupe']
         ? 0
         : baseConfig['dedupe-cache-max-entries']
+      const uploader =
+        baseConfig.uploader ??
+        (baseConfig['uploader-type'] === 'legacy' ? DEFAULT_LEGACY_UPLOADER : undefined)
 
       const deployConfig: DeployConfig = {
         'dedupe-cache-max-entries': effectiveCacheMaxEntries,
@@ -78,7 +85,6 @@ export default class Deploy extends Command {
         'hyperbeam-token-id': baseConfig['hyperbeam-token-id'],
         'hyperbeam-upload-path': baseConfig['hyperbeam-upload-path'],
         name: baseConfig.name,
-        'names-bundler': baseConfig['names-bundler'],
         'names-gateway': baseConfig['names-gateway'],
         'names-graphql': baseConfig['names-graphql'],
         'names-namespace': baseConfig['names-namespace'],
@@ -86,7 +92,7 @@ export default class Deploy extends Command {
         'private-key': walletConfig.privateKey,
         'reference-id': baseConfig['reference-id'],
         'sig-type': baseConfig['sig-type'],
-        uploader: baseConfig.uploader,
+        uploader,
         'uploader-type': baseConfig['uploader-type'],
         'use-names': useNames,
         wallet: walletConfig.wallet,
@@ -174,6 +180,22 @@ export default class Deploy extends Command {
 
         const spinner = ora()
 
+        spinner.start('Validating names reference')
+        const namesTarget = await preflightNamesUpdate({
+          deployKey,
+          gateway: deployConfig['names-gateway'],
+          graphql: deployConfig['names-graphql'],
+          name: deployConfig.name,
+          namespace: deployConfig['names-namespace'],
+          referenceId: deployConfig['reference-id'],
+          sigType: deployConfig['sig-type'] as SignerType,
+        }).catch((error) => {
+          spinner.fail('Names reference validation failed')
+          throw error
+        })
+
+        spinner.succeed('Names reference validated')
+
         const { transactionId: txOrManifestId } = await runUploadWorkflow(deployKey, deployConfig, {
           error: (msg) => this.error(msg),
         })
@@ -185,11 +207,10 @@ export default class Deploy extends Command {
           deployKey,
           gateway: deployConfig['names-gateway'],
           graphql: deployConfig['names-graphql'],
-          name: deployConfig.name,
+          name: namesTarget.name,
           namespace: deployConfig['names-namespace'],
-          referenceId: deployConfig['reference-id'],
+          referenceId: namesTarget.referenceId,
           sigType: deployConfig['sig-type'] as SignerType,
-          updateBundler: deployConfig['names-bundler'],
           value: txOrManifestId,
         }).catch((error) => {
           spinner.fail('Names reference update failed')

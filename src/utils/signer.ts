@@ -1,5 +1,4 @@
-import { ArweaveSigner } from '@ar.io/sdk'
-import { EthereumSigner } from '@ardrive/turbo-sdk'
+import { ArweaveSigner, EthereumSigner } from '@ardrive/turbo-sdk'
 
 import type { SignerType } from '../types/index.js'
 

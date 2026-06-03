@@ -1,7 +1,6 @@
 import path from 'node:path'
 import { Readable } from 'node:stream'
 
-import { OnDemandFunding } from '@ardrive/turbo-sdk'
 import * as mime from 'mime-types'
 import pLimit from 'p-limit'
 
@@ -33,11 +32,10 @@ export interface FolderUploadResult extends UploadResult {
 }
 
 export async function uploadFile(
-  turbo: UploadClient,
+  uploadClient: UploadClient,
   filePath: string,
   options?: {
     cache?: TransactionCache
-    fundingMode?: OnDemandFunding
   },
 ): Promise<UploadResult> {
   const mimeType = mime.lookup(filePath) || 'application/octet-stream'
@@ -59,7 +57,7 @@ export async function uploadFile(
   }
 
   // Upload file
-  const uploadResult = await turbo.uploadFile({
+  const uploadResult = await uploadClient.uploadFile({
     dataItemOpts: {
       tags: [
         {
@@ -77,7 +75,6 @@ export async function uploadFile(
       ],
     },
     file: filePath,
-    ...(options?.fundingMode && { fundingMode: options.fundingMode }),
   })
 
   if (!uploadResult?.id) {
@@ -119,18 +116,17 @@ interface FileUploadTask {
  * Each file is checked against the cache individually, and only uncached files are uploaded.
  * A manifest is then constructed and uploaded to create the folder structure.
  *
- * @param turbo - Upload client used for file and manifest uploads.
+ * @param uploadClient - Upload client used for file and manifest uploads.
  * @param folderPath - Folder to upload.
- * @param options - Upload options for caching, concurrency, funding, and failure handling.
+ * @param options - Upload options for caching, concurrency, and failure handling.
  * @returns Folder upload result including manifest transaction ID and cache stats.
  */
 export async function uploadFolder(
-  turbo: UploadClient,
+  uploadClient: UploadClient,
   folderPath: string,
   options?: {
     cache?: TransactionCache
     concurrency?: number
-    fundingMode?: OnDemandFunding
     throwOnFailure?: boolean
   },
 ): Promise<FolderUploadResult> {
@@ -180,7 +176,7 @@ export async function uploadFolder(
       limit(async () => {
         const mimeType = mime.lookup(task.fullPath) || 'application/octet-stream'
 
-        const uploadResult = await turbo.uploadFile({
+        const uploadResult = await uploadClient.uploadFile({
           dataItemOpts: {
             tags: [
               { name: 'App-Name', value: 'Permaweb-Deploy' },
@@ -188,7 +184,6 @@ export async function uploadFolder(
             ],
           },
           file: task.fullPath,
-          ...(options?.fundingMode && { fundingMode: options.fundingMode }),
         })
 
         if (!uploadResult?.id) {
@@ -256,7 +251,7 @@ export async function uploadFolder(
 
   // Upload the manifest
   const manifestBuffer = Buffer.from(JSON.stringify(manifest))
-  const manifestUploadResult = await turbo.uploadFile({
+  const manifestUploadResult = await uploadClient.uploadFile({
     dataItemOpts: {
       tags: [
         { name: 'App-Name', value: 'Permaweb-Deploy' },
@@ -266,7 +261,6 @@ export async function uploadFolder(
     },
     fileSizeFactory: () => manifestBuffer.length,
     fileStreamFactory: () => Readable.from(manifestBuffer),
-    ...(options?.fundingMode && { fundingMode: options.fundingMode }),
   })
 
   if (!manifestUploadResult?.id) {

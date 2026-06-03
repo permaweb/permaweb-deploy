@@ -1,12 +1,12 @@
 import type { Flag } from '@oclif/core/lib/interfaces'
 
 export type SignerType = 'arweave' | 'ethereum' | 'kyve' | 'polygon'
+export type UploaderType = 'hyperbeam' | 'legacy'
 
 export interface DeployOptions {
   'deploy-file': string
   'deploy-folder': string
   name?: string
-  'names-bundler': string
   'names-gateway': string
   'names-graphql'?: string
   'names-namespace'?: string

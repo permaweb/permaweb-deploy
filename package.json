@@ -42,7 +42,7 @@
         "description": "Deploy to the permaweb"
       },
       "upload": {
-        "description": "Upload to Arweave without updating ArNS"
+        "description": "Upload to Arweave without updating names"
       }
     }
   },
@@ -52,13 +52,15 @@
     "oclif.manifest.json"
   ],
   "dependencies": {
-    "@ar.io/sdk": "^3.22.1",
     "@ardrive/turbo-sdk": "^1.39.1",
     "@dha-team/arbundles": "^1.0.4",
     "@inquirer/prompts": "^7.2.0",
     "@oclif/core": "^4.0.30",
     "@permaweb/aoconnect": "^0.0.85",
     "@permaweb/hyperbalance": "^0.1.0",
+    "@permaweb/references": "github:permaweb/names-sdk#8ef19443f057a8afbdcfe87d47aa4dfd9f597ebb",
+    "arbundles": "^0.11.2",
+    "arweave": "^1.15.7",
     "mime-types": "^3.0.1",
     "ora": "^8.1.1",
     "p-limit": "^7.2.0"

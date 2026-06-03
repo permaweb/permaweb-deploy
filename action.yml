@@ -1,5 +1,5 @@
 name: 'Permaweb Deploy'
-description: 'Deploy static sites to Arweave and update ArNS records. Perfect for PR previews and production deployments.'
+description: 'Deploy static sites to Arweave and optionally update Permaweb Names references.'
 author: 'permaweb'
 branding:
   icon: 'upload-cloud'
@@ -7,15 +7,24 @@ branding:
 
 inputs:
   deploy-key:
-    description: 'Arweave JWK wallet (base64-encoded or JSON string) for Arweave signer, or raw private key for Ethereum/Polygon/KYVE signers'
+    description: 'Arweave JWK wallet (base64-encoded or JSON string) for Arweave signer, or raw private key for upload-only signer flows'
     required: true
-  arns-name:
-    description: 'The ArNS name to update (e.g., "myapp" for myapp.arweave.net)'
-    required: true
-  undername:
-    description: 'The undername to use. Use "@" for base name, or a custom value for undernames (e.g., "docs" for docs_myapp.arweave.net)'
+  name:
+    description: 'The Permaweb Names namespace name to update'
     required: false
-    default: '@'
+  reference-id:
+    description: 'Reference ID to update directly, bypassing namespace name lookup'
+    required: false
+  names-namespace:
+    description: 'Namespace root reference or manifest ID used to resolve name'
+    required: false
+  names-gateway:
+    description: 'Gateway used for names reference and namespace reads'
+    required: false
+    default: 'https://arweave.net'
+  names-graphql:
+    description: 'GraphQL endpoint used for names reference discovery'
+    required: false
   deploy-folder:
     description: 'Path to the folder containing built static files to deploy'
     required: false
@@ -23,31 +32,17 @@ inputs:
   deploy-file:
     description: 'Path to a single file to deploy (alternative to deploy-folder)'
     required: false
-  ttl-seconds:
-    description: 'TTL in seconds for the ANT record (60-86400)'
-    required: false
-    default: '3600'
   sig-type:
-    description: 'Signer type for deployment (arweave, ethereum, polygon, kyve)'
+    description: 'Signer type for uploads (names updates currently require arweave)'
     required: false
     default: 'arweave'
-  ario-process:
-    description: 'ARIO process to use (mainnet, testnet, or a custom process ID)'
-    required: false
-    default: 'mainnet'
-  on-demand:
-    description: 'Enable on-demand payment with specified token (ario or base-eth)'
-    required: false
-  max-token-amount:
-    description: 'Maximum token amount for on-demand payment (used with on-demand)'
-    required: false
   uploader:
-    description: 'Bundler service base URL. For HyperBEAM, pass the node URL, for example https://hyperbeam.example.com.'
+    description: 'Bundler service base URL. Legacy uploads default to https://up.arweave.net; for HyperBEAM, pass the node URL.'
     required: false
   uploader-type:
-    description: 'Uploader protocol to use: turbo or hyperbeam'
+    description: 'Bundler protocol to use: legacy or hyperbeam'
     required: false
-    default: 'turbo'
+    default: 'legacy'
   hyperbeam-upload-path:
     description: 'HyperBEAM bundler route used when uploader-type is hyperbeam'
     required: false
@@ -70,18 +65,18 @@ inputs:
     required: false
     default: 'https://state.forward.computer'
   preview:
-    description: 'Enable preview mode: auto-generates undername from PR number and posts a comment with the preview URL'
+    description: 'Enable preview mode: auto-generates a namespace name from the PR number and posts a comment with the deployment URL'
     required: false
     default: 'false'
-  auto-undername:
-    description: 'Automatically generate undername from PR number or branch name (use preview for full PR preview functionality)'
+  auto-name:
+    description: 'Automatically generate the namespace name from PR number or branch name'
     required: false
     default: 'false'
   github-token:
     description: 'GitHub token for posting PR comments (required when preview is enabled)'
     required: false
   no-dedupe:
-    description: 'Disable deduplication (do not cache or reuse previous uploads). By default, permaweb-deploy caches your deployment log to prevent uploading duplicate (unchanged) files.'
+    description: 'Disable deduplication (do not cache or reuse previous uploads). By default, permaweb-deploy caches your deployment log to prevent uploading duplicate files.'
     required: false
     default: 'false'
   dedupe-cache-max-entries:
@@ -93,11 +88,14 @@ outputs:
     description: 'The Arweave transaction ID of the uploaded content'
     value: ${{ steps.deploy.outputs.tx-id }}
   deployment-url:
-    description: 'The full URL where the deployment is accessible'
+    description: 'The immutable Arweave URL where the deployment is accessible'
     value: ${{ steps.deploy.outputs.deployment-url }}
-  undername-used:
-    description: 'The undername that was used for the deployment'
-    value: ${{ steps.deploy.outputs.undername-used }}
+  name-used:
+    description: 'The Permaweb Names namespace name that was used for the deployment'
+    value: ${{ steps.name.outputs.name }}
+  reference-id:
+    description: 'The Permaweb Names reference ID that was updated'
+    value: ${{ steps.deploy.outputs.reference-id }}
 
 runs:
   using: 'composite'
@@ -119,50 +117,38 @@ runs:
         path: .permaweb-deploy/transaction-cache.json
         key: permaweb-deploy-transaction-cache
 
-    - name: Determine undername
-      id: undername
+    - name: Determine namespace name
+      id: name
       shell: bash
       run: |
-        UNDERNAME="${{ inputs.undername }}"
-        AUTO_UNDERNAME="${{ inputs.auto-undername }}"
+        NAME="${{ inputs.name }}"
+        REFERENCE_ID="${{ inputs.reference-id }}"
+        AUTO_NAME="${{ inputs.auto-name }}"
         PREVIEW="${{ inputs.preview }}"
 
-        # Preview mode implies auto-undername
         if [[ "$PREVIEW" == "true" ]]; then
-          AUTO_UNDERNAME="true"
+          AUTO_NAME="true"
         fi
 
-        if [[ "$AUTO_UNDERNAME" == "true" && "$UNDERNAME" == "@" ]]; then
-          # Get sanitized repository name
+        if [[ "$AUTO_NAME" == "true" ]]; then
           REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+          GENERATED_NAME=""
 
-          # Check if this is a pull request
           if [[ -n "${{ github.event.pull_request.number }}" ]]; then
-            UNDERNAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}"
-            echo "Auto-generated undername from PR: $UNDERNAME"
+            GENERATED_NAME="${REPO_NAME}-pr-${{ github.event.pull_request.number }}"
+            echo "Auto-generated namespace name from PR: $GENERATED_NAME"
           elif [[ -n "${{ github.ref_name }}" && "${{ github.ref_name }}" != "main" && "${{ github.ref_name }}" != "master" ]]; then
-            # Sanitize branch name for use as undername
             BRANCH_NAME=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
-            UNDERNAME="${REPO_NAME}-${BRANCH_NAME}"
-            echo "Auto-generated undername from branch: $UNDERNAME"
+            GENERATED_NAME="${REPO_NAME}-${BRANCH_NAME}"
+            echo "Auto-generated namespace name from branch: $GENERATED_NAME"
           fi
 
-          # Ensure length constraints: < 61 chars and != 43 chars
-          if [[ ${#UNDERNAME} -ge 61 ]]; then
-            # Truncate to 60 characters
-            UNDERNAME="${UNDERNAME:0:60}"
-            echo "Truncated undername to 60 characters: $UNDERNAME"
-          fi
-
-          # Avoid exactly 43 characters (Arweave transaction ID length)
-          if [[ ${#UNDERNAME} -eq 43 ]]; then
-            # Append 'x' to make it 44 characters
-            UNDERNAME="${UNDERNAME}x"
-            echo "Adjusted undername to avoid 43 characters: $UNDERNAME"
+          if [[ -n "$GENERATED_NAME" ]]; then
+            NAME="$GENERATED_NAME"
           fi
         fi
 
-        echo "undername=$UNDERNAME" >> $GITHUB_OUTPUT
+        echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
     - name: Deploy to Permaweb
       id: deploy
@@ -170,73 +156,70 @@ runs:
       env:
         DEPLOY_KEY: ${{ inputs.deploy-key }}
       run: |
-        # Handle deploy key format (base64 or JSON)
         if [[ "$DEPLOY_KEY" =~ ^[A-Za-z0-9+/]+=*$ ]]; then
-          # Looks like base64, use as is
           echo "Deploy key appears to be base64 encoded"
         elif [[ "$DEPLOY_KEY" =~ ^\{.*\}$ ]]; then
-          # JSON format, encode to base64
           echo "Deploy key is JSON, encoding to base64"
           DEPLOY_KEY=$(echo -n "$DEPLOY_KEY" | base64)
         fi
 
-        # Build command arguments
-        ARGS="--arns-name ${{ inputs.arns-name }}"
-        ARGS="$ARGS --undername ${{ steps.undername.outputs.undername }}"
-        ARGS="$ARGS --ttl-seconds ${{ inputs.ttl-seconds }}"
-        ARGS="$ARGS --sig-type ${{ inputs.sig-type }}"
-        ARGS="$ARGS --ario-process ${{ inputs.ario-process }}"
+        NAME="${{ steps.name.outputs.name }}"
+        ARGS=(--sig-type "${{ inputs.sig-type }}")
 
-        # Add deploy-folder or deploy-file
+        if [[ -n "$NAME" ]]; then
+          ARGS+=(--use-names)
+          ARGS+=(--name "$NAME")
+        fi
+        if [[ -n "${{ inputs.reference-id }}" ]]; then
+          ARGS+=(--use-names)
+          ARGS+=(--reference-id "${{ inputs.reference-id }}")
+        fi
+        if [[ -n "${{ inputs.names-namespace }}" ]]; then
+          ARGS+=(--names-namespace "${{ inputs.names-namespace }}")
+        fi
+        ARGS+=(--names-gateway "${{ inputs.names-gateway }}")
+        if [[ -n "${{ inputs.names-graphql }}" ]]; then
+          ARGS+=(--names-graphql "${{ inputs.names-graphql }}")
+        fi
+
         if [[ -n "${{ inputs.deploy-file }}" ]]; then
-          ARGS="$ARGS --deploy-file ${{ inputs.deploy-file }}"
+          ARGS+=(--deploy-file "${{ inputs.deploy-file }}")
         else
-          ARGS="$ARGS --deploy-folder ${{ inputs.deploy-folder }}"
+          ARGS+=(--deploy-folder "${{ inputs.deploy-folder }}")
         fi
 
-        # Add on-demand payment options if specified
-        if [[ -n "${{ inputs.on-demand }}" ]]; then
-          ARGS="$ARGS --on-demand ${{ inputs.on-demand }}"
-          if [[ -n "${{ inputs.max-token-amount }}" ]]; then
-            ARGS="$ARGS --max-token-amount ${{ inputs.max-token-amount }}"
-          fi
-        fi
-
-        # Add uploader options
-        ARGS="$ARGS --uploader-type ${{ inputs.uploader-type }}"
+        ARGS+=(--uploader-type "${{ inputs.uploader-type }}")
         if [[ -n "${{ inputs.uploader }}" ]]; then
-          ARGS="$ARGS --uploader ${{ inputs.uploader }}"
+          ARGS+=(--uploader "${{ inputs.uploader }}")
         fi
         if [[ "${{ inputs.uploader-type }}" == "hyperbeam" ]]; then
-          ARGS="$ARGS --hyperbeam-upload-path ${{ inputs.hyperbeam-upload-path }}"
+          ARGS+=(--hyperbeam-upload-path "${{ inputs.hyperbeam-upload-path }}")
           if [[ "${{ inputs.hyperbeam-auto-fund }}" == "true" ]]; then
-            ARGS="$ARGS --hyperbeam-auto-fund"
+            ARGS+=(--hyperbeam-auto-fund)
           fi
           if [[ -n "${{ inputs.hyperbeam-fund-amount }}" ]]; then
-            ARGS="$ARGS --hyperbeam-fund-amount ${{ inputs.hyperbeam-fund-amount }}"
+            ARGS+=(--hyperbeam-fund-amount "${{ inputs.hyperbeam-fund-amount }}")
           fi
           if [[ -n "${{ inputs.hyperbeam-token-id }}" ]]; then
-            ARGS="$ARGS --hyperbeam-token-id ${{ inputs.hyperbeam-token-id }}"
+            ARGS+=(--hyperbeam-token-id "${{ inputs.hyperbeam-token-id }}")
           fi
           if [[ -n "${{ inputs.hyperbeam-ledger-id }}" ]]; then
-            ARGS="$ARGS --hyperbeam-ledger-id ${{ inputs.hyperbeam-ledger-id }}"
+            ARGS+=(--hyperbeam-ledger-id "${{ inputs.hyperbeam-ledger-id }}")
           fi
           if [[ -n "${{ inputs.hyperbeam-ao-state-url }}" ]]; then
-            ARGS="$ARGS --hyperbeam-ao-state-url ${{ inputs.hyperbeam-ao-state-url }}"
+            ARGS+=(--hyperbeam-ao-state-url "${{ inputs.hyperbeam-ao-state-url }}")
           fi
         fi
 
-        # Add dedupe options
         if [[ "${{ inputs.no-dedupe }}" == "true" ]]; then
-          ARGS="$ARGS --no-dedupe"
+          ARGS+=(--no-dedupe)
         elif [[ -n "${{ inputs.dedupe-cache-max-entries }}" ]]; then
-          ARGS="$ARGS --dedupe-cache-max-entries ${{ inputs.dedupe-cache-max-entries }}"
+          ARGS+=(--dedupe-cache-max-entries "${{ inputs.dedupe-cache-max-entries }}")
         fi
 
-        echo "Running: permaweb-deploy deploy $ARGS"
+        echo "Running: permaweb-deploy deploy ${ARGS[*]}"
 
-        # Run deploy and capture output
-        OUTPUT=$(permaweb-deploy deploy $ARGS 2>&1) || {
+        OUTPUT=$(permaweb-deploy deploy "${ARGS[@]}" 2>&1) || {
           echo "Deployment failed"
           echo "$OUTPUT"
           exit 1
@@ -244,26 +227,17 @@ runs:
 
         echo "$OUTPUT"
 
-        # Extract transaction ID from output (look for "Tx ID" in the table)
         TX_ID=$(echo "$OUTPUT" | grep -oP 'Tx ID\s*│\s*\K[a-zA-Z0-9_-]{43}' || echo "")
         if [[ -z "$TX_ID" ]]; then
-          # Try alternative patterns
           TX_ID=$(echo "$OUTPUT" | grep -oE '[a-zA-Z0-9_-]{43}' | head -1 || echo "")
         fi
 
-        echo "tx-id=$TX_ID" >> $GITHUB_OUTPUT
-        echo "undername-used=${{ steps.undername.outputs.undername }}" >> $GITHUB_OUTPUT
+        REFERENCE_ID=$(echo "$OUTPUT" | grep -oP 'Reference ID\s*│\s*\K\S+' || echo "${{ inputs.reference-id }}")
+        DEPLOYMENT_URL="https://arweave.net/${TX_ID}"
 
-        # Build deployment URL
-        ARNS_NAME="${{ inputs.arns-name }}"
-        UNDERNAME="${{ steps.undername.outputs.undername }}"
-        if [[ "$UNDERNAME" == "@" ]]; then
-          DEPLOYMENT_URL="https://${ARNS_NAME}.ar.io"
-        else
-          DEPLOYMENT_URL="https://${UNDERNAME}_${ARNS_NAME}.ar.io"
-        fi
-
-        echo "deployment-url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+        echo "tx-id=$TX_ID" >> "$GITHUB_OUTPUT"
+        echo "reference-id=$REFERENCE_ID" >> "$GITHUB_OUTPUT"
+        echo "deployment-url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
         echo "Deployment URL: $DEPLOYMENT_URL"
 
     - name: Delete old transaction cache
@@ -273,7 +247,6 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        # Delete previous cache so we can save an updated one
         gh cache delete permaweb-deploy-transaction-cache 2>/dev/null || true
 
     - name: Save transaction cache
@@ -292,22 +265,21 @@ runs:
         script: |
           const deploymentUrl = '${{ steps.deploy.outputs.deployment-url }}';
           const txId = '${{ steps.deploy.outputs.tx-id }}';
-          const undername = '${{ steps.deploy.outputs.undername-used }}';
-          const arnsName = '${{ inputs.arns-name }}';
+          const name = '${{ steps.name.outputs.name }}';
+          const referenceId = '${{ steps.deploy.outputs.reference-id }}';
 
           const body = `## Permaweb Preview Deployed
 
-          Your preview is available at: **${deploymentUrl}**
+          Your preview content is available at: **${deploymentUrl}**
 
           | Property | Value |
           |----------|-------|
           | Transaction ID | \`${txId}\` |
-          | ArNS Name | ${arnsName} |
-          | Undername | ${undername} |
+          | Namespace Name | ${name || 'n/a'} |
+          | Reference ID | ${referenceId || 'n/a'} |
 
-          > This preview will be available permanently on Arweave via the [AR.IO Network](https://ar.io).`;
+          The namespace reference has been updated to point at this deployment.`;
 
-          // Find existing comment
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -319,7 +291,6 @@ runs:
           );
 
           if (botComment) {
-            // Update existing comment
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -327,7 +298,6 @@ runs:
               body: body
             });
           } else {
-            // Create new comment
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -335,94 +305,3 @@ runs:
               body: body
             });
           }
-
-    - name: Delete undername on PR close
-      if: github.event_name == 'pull_request' && github.event.action == 'closed' && steps.undername.outputs.undername != '@' && (inputs.auto-undername == 'true' || inputs.preview == 'true')
-      shell: bash
-      env:
-        DEPLOY_KEY: ${{ inputs.deploy-key }}
-      run: |
-        UNDERNAME="${{ steps.undername.outputs.undername }}"
-
-        # Safety check: never delete the @ undername (base record)
-        if [[ "$UNDERNAME" == "@" ]]; then
-          echo "Safety check: Cannot delete the base record (@). Skipping deletion."
-          exit 0
-        fi
-
-        echo "Deleting undername '$UNDERNAME' for ArNS name '${{ inputs.arns-name }}'..."
-
-        # Handle deploy key format (base64 or JSON)
-        if [[ "$DEPLOY_KEY" =~ ^[A-Za-z0-9+/]+=*$ ]]; then
-          # Already base64, use as is
-          echo "Deploy key is already base64 encoded"
-        elif [[ "$DEPLOY_KEY" =~ ^\{.*\}$ ]]; then
-          # JSON format, encode to base64
-          echo "Deploy key is JSON, encoding to base64"
-          DEPLOY_KEY=$(echo -n "$DEPLOY_KEY" | base64)
-        fi
-
-        # Get the ANT process ID for the ArNS name
-        echo "Getting ArNS record to find ANT process ID..."
-        PROCESS_ID=$(ar.io get-arns-record --name "${{ inputs.arns-name }}" --json | jq -r '.processId' 2>/dev/null) || {
-          echo "Warning: Failed to get ArNS record. The record may not exist."
-          exit 0
-        }
-
-        if [[ -z "$PROCESS_ID" || "$PROCESS_ID" == "null" ]]; then
-          echo "Warning: No process ID found for ArNS name '${{ inputs.arns-name }}'"
-          exit 0
-        fi
-
-        echo "Found ANT process ID: $PROCESS_ID"
-
-        # Remove the undername from the ANT
-        ar.io remove-ant-record \
-          --process-id "$PROCESS_ID" \
-          --undername "${{ steps.undername.outputs.undername }}" \
-          --private-key "$DEPLOY_KEY" \
-          2>&1 || {
-          echo "Warning: Failed to delete undername. It may have already been deleted or may not exist."
-          # Don't fail the workflow if deletion fails
-        }
-
-    - name: Comment on PR close
-      if: github.event_name == 'pull_request' && github.event.action == 'closed' && inputs.github-token != ''
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ inputs.github-token }}
-        script: |
-          const undername = '${{ steps.undername.outputs.undername }}';
-          const arnsName = '${{ inputs.arns-name }}';
-          let deploymentUrl;
-
-          if (undername === '@') {
-            deploymentUrl = `https://${arnsName}.ar.io`;
-          } else {
-            deploymentUrl = `https://${undername}_${arnsName}.ar.io`;
-          }
-
-          let body;
-          if (undername !== '@') {
-            body = `## Pull Request Closed
-
-          This PR has been closed. The undername \`${undername}\` has been removed from the ArNS record.
-
-          The deployment remains permanently available on Arweave at its transaction ID.
-
-          > Note: The preview URL (${deploymentUrl}) is no longer accessible as the undername has been deleted.`;
-          } else {
-            body = `## Pull Request Closed
-
-          This PR has been closed. The deployment remains available at:
-          **${deploymentUrl}**
-
-          > Arweave deployments are permanent and will continue to be accessible.`;
-          }
-
-          await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-            body: body
-          });

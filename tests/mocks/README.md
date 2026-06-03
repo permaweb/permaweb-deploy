@@ -53,7 +53,6 @@ All default handlers are automatically loaded:
 
 - **Payment Service**
   - `GET /v1/balance` - Get wallet balance
-  - `POST /v1/top-up` - Top up with tokens
   - `GET /v1/rates/:currency/:amount` - Get fiat rates
 
 ### Custom Handlers
@@ -85,24 +84,6 @@ it('should handle upload errors', () => {
 ### Payment Helpers
 
 - `mockInsufficientBalance(winc)` - Mock low balance scenario
-- `mockOnDemandFundingSuccess(winc)` - Mock successful on-demand top-up
-
-### Example: Testing On-Demand Funding
-
-```typescript
-import { mockInsufficientBalance, mockOnDemandFundingSuccess } from '../mocks/turbo-handlers.js'
-import { server } from '../setup.js'
-
-it('should top up when balance is low', async () => {
-  // Setup: wallet has low balance
-  server.use(mockInsufficientBalance('100'), mockOnDemandFundingSuccess('1000000000000'))
-
-  // Your upload code that triggers on-demand funding
-  const result = await uploadWithOnDemandFunding()
-
-  expect(result.success).toBe(true)
-})
-```
 
 ## Mock Data
 

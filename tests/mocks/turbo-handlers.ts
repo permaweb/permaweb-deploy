@@ -9,7 +9,13 @@ import type { components as UploadComponents } from '../types/upload-service.js'
 type DataItemPost = UploadComponents['schemas']['DataItemPost']
 type BalanceResponse = PaymentComponents['schemas']['BalanceResponse']
 type CreditResponse = PaymentComponents['schemas']['CreditResponse']
-type CreditedPaymentTx = PaymentComponents['schemas']['CreditedPaymentTx']
+type AoDryRunTag = {
+  name?: string
+  value?: string
+}
+type AoDryRunRequest = {
+  Tags?: AoDryRunTag[]
+}
 
 /**
  * Mock data generators for Turbo API responses
@@ -27,24 +33,6 @@ export const mockTurboData = {
   priceResponse: (winc = '100000000'): CreditResponse => ({
     adjustments: [],
     winc,
-  }),
-
-  // Crypto fund/top-up response from Payment Service
-  topUpResponse: (
-    winc = '1000000000000',
-    txId = 'K4C3y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8',
-  ): CreditedPaymentTx => ({
-    block: 1_234_567,
-    confirmedBlocks: 50,
-    id: txId,
-    owner: 'mock-owner',
-    quantity: '1000000000',
-    status: 'confirmed',
-    target: 'turbo-wallet-address',
-    transactionId: txId,
-    transactionQuantity: 1_000_000_000,
-    winc,
-    winstonCreditAmount: winc,
   }),
 
   // Folder upload response (TurboUploadFolderResponse)
@@ -139,6 +127,23 @@ export const turboUploadHandlers = [
 
   // Upload with specific token (POST /v1/tx/:token)
   http.post('https://upload.ardrive.io/v1/tx/:token', async ({ params: _params }) =>
+    HttpResponse.json(mockTurboData.uploadResponse()),
+  ),
+  http.get('https://up.arweave.net/', async () =>
+    HttpResponse.json({
+      addresses: {
+        arweave: '8wgRDgvYOrtSaWEIV21g0lTuWDUnTu4_iYj4hmA7PI0',
+        ethereum: '0x8wgRDgvYOrtSaWEIV21g0lTuWDUnTu4_iYj4hmA7PI0',
+        solana: '8wgRDgvYOrtSaWEIV21g0lTuWDUnTu4_iYj4hmA7PI0',
+      },
+      gateway: 'https://arweave.net',
+      version: '0.1.0',
+    }),
+  ),
+  http.post('https://up.arweave.net/v1/tx', async () =>
+    HttpResponse.json(mockTurboData.uploadResponse()),
+  ),
+  http.post('https://up.arweave.net/v1/tx/:token', async ({ params: _params }) =>
     HttpResponse.json(mockTurboData.uploadResponse()),
   ),
 
@@ -262,42 +267,30 @@ export const turboPaymentHandlers = [
       winc: mockTurboData.priceResponse().winc,
     }),
   ),
-
-  // Submit fund transaction (POST /v1/account/balance/:token)
-  http.post(
-    'https://payment.ardrive.io/v1/account/balance/:token',
-    async ({ params: _params, request }) => {
-      const body = (await request.json()) as { tx_id: string }
-      return HttpResponse.json({
-        creditedTransaction: mockTurboData.topUpResponse('1000000000000', body.tx_id),
-        message: 'Transaction credited',
-      })
-    },
-  ),
 ]
 
 /**
- * Default MSW handlers for AO/ArNS Service
+ * Default MSW handlers for legacy AO service calls.
  */
 export const aoHandlers = [
-  // AO dry-run endpoint - used for reading contract state (getArNSRecord, etc.)
+  // AO dry-run endpoint - used by legacy contract-state readers.
   http.post('https://cu.ardrive.io/dry-run', async ({ request }) => {
-    const body = (await request.json()) as any
-    const tags = body?.Tags || []
-    const action = tags.find((t: any) => t.name === 'Action')?.value
+    const body = (await request.json()) as AoDryRunRequest
+    const tags = body.Tags ?? []
+    const action = tags.find((tag) => tag.name === 'Action')?.value
 
-    // Handle ArNS record lookup
+    // Handle legacy record lookup
     if (action === 'Record') {
       return HttpResponse.json({
         Error: null,
         Messages: [
           {
             Data: JSON.stringify({
+              nameLimit: 10,
               processId: 'xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10',
               purchasePrice: 1000,
               startTimestamp: Date.now() - 86_400_000,
               type: 'permabuy',
-              undernameLimit: 10,
             }),
             Tags: [
               { name: 'Action', value: 'Record' },
@@ -310,16 +303,16 @@ export const aoHandlers = [
       })
     }
 
-    // Handle ANT Info (contract validation)
+    // Handle legacy token info
     if (action === 'Info') {
       return HttpResponse.json({
         Error: null,
         Messages: [
           {
             Data: JSON.stringify({
-              Name: 'Mock ANT',
+              Name: 'Mock Reference',
               Owner: 'mock-owner-address',
-              Ticker: 'MOCK-ANT',
+              Ticker: 'MOCK-REFERENCE',
             }),
             Tags: [
               { name: 'Action', value: 'Info' },
@@ -332,7 +325,7 @@ export const aoHandlers = [
       })
     }
 
-    // Handle ANT State (get current records)
+    // Handle legacy token state
     if (action === 'State') {
       return HttpResponse.json({
         Error: null,
@@ -341,7 +334,7 @@ export const aoHandlers = [
             Data: JSON.stringify({
               Balances: { 'mock-owner-address': 1 },
               Controllers: ['mock-owner-address'],
-              Name: 'Mock ANT',
+              Name: 'Mock Reference',
               Owner: 'mock-owner-address',
               Records: {
                 '@': {
@@ -349,7 +342,7 @@ export const aoHandlers = [
                   ttlSeconds: 3600,
                 },
               },
-              Ticker: 'MOCK-ANT',
+              Ticker: 'MOCK-REFERENCE',
             }),
             Tags: [
               { name: 'Action', value: 'State' },
@@ -462,7 +455,7 @@ export const aoHandlers = [
               node: {
                 id: 'xU9zFkq3X2ZQ6olwNVvr1vUWIjc3kXTWr7xKQD6dh10',
                 owner: { address: 'mock-owner-address' },
-                tags: [{ name: 'Contract-Src', value: 'ANT' }],
+                tags: [{ name: 'Contract-Src', value: 'LEGACY' }],
               },
             },
           ],
@@ -520,15 +513,4 @@ export function mockInsufficientBalance(balanceWinc = '100', costWinc = '1000000
       HttpResponse.json(mockTurboData.priceResponse(costWinc)),
     ),
   ]
-}
-
-/**
- * Helper to create on-demand funding success
- * @param winc - Amount topped up in winc
- * @returns MSW handler for on-demand funding success
- */
-export function mockOnDemandFundingSuccess(winc = '1000000000000') {
-  return http.post('https://payment.ardrive.io/v1/top-up', async () =>
-    HttpResponse.json(mockTurboData.topUpResponse(winc)),
-  )
 }

@@ -93,7 +93,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    type: "ario" | "solana" | "base-eth" | "arweave" | "ethereum";
+                    type: "solana" | "arweave" | "ethereum";
                     amount: number;
                 };
                 cookie?: never;
@@ -134,7 +134,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    token: "arweave" | "ario" | "solana" | "base-eth";
+                    token: "arweave" | "solana";
                 };
                 cookie?: never;
             };

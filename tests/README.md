@@ -118,24 +118,6 @@ The MSW server intercepts requests to:
 
 E2E tests use `@oclif/test` to run actual CLI commands with mocked network requests:
 
-```typescript
-import { runCommand } from '@oclif/test'
-
-it('should deploy with on-demand funding', async () => {
-  const result = await runCommand([
-    'deploy',
-    '--deploy-folder',
-    './test-app',
-    '--on-demand',
-    'ario',
-    '--max-token-amount',
-    '1.5',
-  ])
-
-  expect(result.error).toBeUndefined()
-})
-```
-
 ### Adding New Mocks
 
 Add handlers to `mocks/turbo-handlers.ts`:

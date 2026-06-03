@@ -95,8 +95,6 @@ paths:
               - arweave
               - ethereum
               - solana
-              - ario
-              - base-eth
       requestBody:
         required: true
         content:

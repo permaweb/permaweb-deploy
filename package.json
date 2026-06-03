@@ -115,7 +115,7 @@
   "homepage": "https://github.com/permaweb/permaweb-deploy#readme",
   "lint-staged": {
     "{src,tests}/**/*.{ts,tsx}": [
-      "eslint --fix --max-warnings=0",
+      "eslint --fix --no-ignore --max-warnings=0",
       "prettier --write"
     ],
     "*.{json,md,yml,yaml}": "prettier --write"

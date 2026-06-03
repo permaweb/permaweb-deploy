@@ -93,7 +93,6 @@ Useful flags:
 - `--name, -n`: namespace name to update.
 - `--reference-id`: reference ID to update directly.
 - `--names-namespace`: namespace root reference or manifest ID used to resolve `--name`.
-- `--names-bundler`: deprecated; names reference updates are posted directly to Arweave.
 - `--names-gateway`: gateway for reference and namespace reads. Default: `https://arweave.net`.
 - `--names-graphql`: GraphQL endpoint for reference discovery. Default: `<names-gateway>/graphql`.
 
@@ -147,7 +146,7 @@ HyperBEAM uploads require an Arweave JWK signer. The default route is `/~bundler
 - `--hyperbeam-token-id`: advanced AO token process ID override.
 - `--hyperbeam-ledger-id`: advanced local HyperBEAM ledger ID override.
 - `--hyperbeam-ao-state-url`: AO state endpoint used while waiting for auto-fund assignment.
-- `--use-names`, `--name`, `--reference-id`, `--names-namespace`, `--names-bundler`, `--names-gateway`, `--names-graphql`: names publishing options.
+- `--use-names`, `--name`, `--reference-id`, `--names-namespace`, `--names-gateway`, `--names-graphql`: names publishing options.
 
 `upload` accepts upload, wallet, signer, bundler, and dedupe flags only.
 
@@ -237,7 +236,6 @@ Action inputs for names publishing:
 - `name`: namespace name to update.
 - `reference-id`: reference ID to update directly.
 - `names-namespace`: namespace root reference or manifest ID.
-- `names-bundler`: deprecated; names reference updates are posted directly to Arweave.
 - `names-gateway`: gateway for reference and namespace reads.
 - `names-graphql`: GraphQL endpoint for reference discovery.
 - `auto-name`: generate a namespace name from PR number or branch name.

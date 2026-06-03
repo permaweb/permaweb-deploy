@@ -27,8 +27,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@permaweb/references':
-        specifier: github:permaweb/names-sdk#8ef19443f057a8afbdcfe87d47aa4dfd9f597ebb
-        version: https://codeload.github.com/permaweb/names-sdk/tar.gz/8ef19443f057a8afbdcfe87d47aa4dfd9f597ebb(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(arweave@1.15.7)
+        specifier: ^0.1.0
+        version: 0.1.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(arweave@1.15.7)
       arbundles:
         specifier: ^0.11.2
         version: 0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
@@ -1365,9 +1365,8 @@ packages:
   '@permaweb/protocol-tag-utils@0.0.2':
     resolution: {integrity: sha512-2IiKu71W7pkHKIzxabCGQ5q8DSppZaE/sPcPF2hn+OWwfe04M7b5X5LHRXQNPRuxHWuioieGdPQb3F7apOlffQ==}
 
-  '@permaweb/references@https://codeload.github.com/permaweb/names-sdk/tar.gz/8ef19443f057a8afbdcfe87d47aa4dfd9f597ebb':
-    resolution: {tarball: https://codeload.github.com/permaweb/names-sdk/tar.gz/8ef19443f057a8afbdcfe87d47aa4dfd9f597ebb}
-    version: 0.1.0
+  '@permaweb/references@0.1.0':
+    resolution: {integrity: sha512-M/W1lIr5e6/wKVc3DBQzbqmum86FjewRHX2UD3zrTGDQ93ZdNNULRCOuB7FeP9sFS/O894mEnz1wlLqbzi4Lng==}
     peerDependencies:
       arbundles: '*'
       arweave: '*'
@@ -7966,7 +7965,7 @@ snapshots:
 
   '@permaweb/protocol-tag-utils@0.0.2': {}
 
-  '@permaweb/references@https://codeload.github.com/permaweb/names-sdk/tar.gz/8ef19443f057a8afbdcfe87d47aa4dfd9f597ebb(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(arweave@1.15.7)':
+  '@permaweb/references@0.1.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(arweave@1.15.7)':
     optionalDependencies:
       arbundles: 0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       arweave: 1.15.7

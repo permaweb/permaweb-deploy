@@ -1,14 +1,14 @@
 # OpenAPI Specifications
 
-This directory contains the OpenAPI specifications for Turbo services used to generate TypeScript types for testing.
+This directory contains the OpenAPI specifications for legacy upload services used to generate TypeScript types for testing.
 
 ## Files
 
-- **`upload-service.openapi.yaml`** - Turbo Upload Service API specification
-  - Original: https://turbo.ardrive.io/api-docs
+- **`upload-service.openapi.yaml`** - Legacy Upload Service API specification
+  - Source: legacy upload OpenAPI fixture
   - Defines endpoints for uploading data items to Arweave
 
-- **`payment-service.openapi.yaml`** - Turbo Payment Service API specification
+- **`payment-service.openapi.yaml`** - Legacy Payment Service API specification
   - Original: https://payment.ardrive.io/api-docs
   - Defines endpoints for balance, pricing, and payment processing
 
@@ -27,12 +27,12 @@ npx openapi-typescript tests/fixtures/payment-service.openapi.yaml -o tests/type
 
 Generated types are used in:
 
-- MSW mock handlers (`tests/mocks/turbo-handlers.ts`)
+- MSW mock handlers (`tests/mocks/legacy-handlers.ts`)
 - Test files for type-safe API responses
 
 ## Updating Specifications
 
-When Turbo APIs are updated:
+When Legacy Upload APIs are updated:
 
 1. Update the YAML files in this directory
 2. Run `pnpm generate:types` to regenerate TypeScript types

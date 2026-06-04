@@ -1,8 +1,8 @@
 openapi: 3.1.1
 info:
-  title: Turbo Upload Service
+  title: Legacy Upload Service
   version: 0.1.0
-  description: The Turbo Upload Service supports posting signed data-items to Arweave.net using Turbo Credits.
+  description: The Legacy Upload Service supports posting signed data-items to Arweave.net using legacy upload.
 
 servers:
   - url: https://upload.ardrive.io/v1

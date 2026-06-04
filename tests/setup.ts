@@ -1,7 +1,7 @@
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
-import { turboHandlers } from './mocks/turbo-handlers.js'
+import { legacyHandlers } from './mocks/legacy-handlers.js'
 
 /**
  * Enable verbose logging for MSW requests
@@ -12,13 +12,13 @@ const VERBOSE_LOGGING = process.env.MSW_VERBOSE === 'true'
 /**
  * MSW Server for mocking HTTP requests in tests
  * Configured to intercept requests to:
- * - Turbo Upload Service (upload.ardrive.io)
- * - Turbo Payment Service (payment.ardrive.io)
+ * - Legacy Upload Service (upload.ardrive.io)
+ * - Legacy Payment Service (payment.ardrive.io)
  * - AO Compute Unit (cu.ardrive.io)
  * - AO Message Unit (mu.ao-testnet.xyz)
  * - Arweave GraphQL (arweave.net/graphql)
  */
-export const server = setupServer(...turboHandlers)
+export const server = setupServer(...legacyHandlers)
 
 // Start server before all tests
 beforeAll(() => {

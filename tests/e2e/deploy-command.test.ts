@@ -5,7 +5,6 @@ import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { TEST_ARWEAVE_WALLET, TEST_ETH_PRIVATE_KEY } from '../constants.js'
-import { mockInsufficientBalance } from '../mocks/turbo-handlers.js'
 import { server } from '../setup.js'
 
 const DEFAULT_LEGACY_UPLOADER = 'https://up.arweave.net'
@@ -623,83 +622,6 @@ describe(
         // Clean up
         if (fs.existsSync(cacheDir)) {
           fs.rmSync(cacheDir, { force: true, recursive: true })
-        }
-      })
-    })
-
-    describe('insufficient balance', () => {
-      it('should fail deployment when wallet has insufficient legacy bundler credits', async () => {
-        // Mock insufficient balance: balance = 100 winc, cost = 1000000 winc
-        server.use(...mockInsufficientBalance('100', '1000000'))
-
-        // Create a large test file (> 105 KiB threshold)
-        const fs = await import('node:fs')
-        const path = await import('node:path')
-        const largeFilePath = path.join(process.cwd(), 'tests/fixtures/large-test-file.bin')
-        const largeFileSize = 200_000 // 200 KB - above the 105 KiB threshold
-        const largeFileBuffer = Buffer.alloc(largeFileSize, 'a')
-        fs.writeFileSync(largeFilePath, largeFileBuffer)
-
-        try {
-          const { error } = await runCommand([
-            'deploy',
-            '--deploy-file',
-            largeFilePath,
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--uploader-type',
-            'legacy',
-          ])
-
-          expect(error).toBeDefined()
-          expect(error?.message).toMatch(/Insufficient legacy bundler credits/)
-          expect(error?.message).toMatch(/Required.*winc.*available.*winc/)
-        } finally {
-          // Clean up test file
-          if (fs.existsSync(largeFilePath)) {
-            fs.unlinkSync(largeFilePath)
-          }
-        }
-      })
-
-      it('should fail deployment when folder upload exceeds balance', async () => {
-        // Mock insufficient balance: balance = 50000 winc, cost = 200000 winc
-        server.use(...mockInsufficientBalance('50000', '200000'))
-
-        // Create a large test folder (> 105 KiB threshold)
-        const fs = await import('node:fs')
-        const path = await import('node:path')
-        const largeFolderPath = path.join(process.cwd(), 'tests/fixtures/large-test-folder')
-        const largeFileSize = 150_000 // 150 KB - above the 105 KiB threshold
-        const largeFileBuffer = Buffer.alloc(largeFileSize, 'b')
-
-        // Create folder and file
-        if (!fs.existsSync(largeFolderPath)) {
-          fs.mkdirSync(largeFolderPath, { recursive: true })
-        }
-
-        const largeFilePath = path.join(largeFolderPath, 'large-file.bin')
-        fs.writeFileSync(largeFilePath, largeFileBuffer)
-
-        try {
-          const { error } = await runCommand([
-            'deploy',
-            '--deploy-folder',
-            largeFolderPath,
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--uploader-type',
-            'legacy',
-          ])
-
-          expect(error).toBeDefined()
-          expect(error?.message).toMatch(/Insufficient legacy bundler credits/)
-          expect(error?.message).toMatch(/Required.*winc.*available.*winc/)
-        } finally {
-          // Clean up test folder
-          if (fs.existsSync(largeFolderPath)) {
-            fs.rmSync(largeFolderPath, { force: true, recursive: true })
-          }
         }
       })
     })

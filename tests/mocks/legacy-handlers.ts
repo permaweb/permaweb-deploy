@@ -18,10 +18,10 @@ type AoDryRunRequest = {
 }
 
 /**
- * Mock data generators for Turbo API responses
- * Based on actual Turbo SDK types and API responses
+ * Mock data generators for Legacy Upload API responses
+ * Based on actual legacy upload types and API responses
  */
-export const mockTurboData = {
+export const mockLegacyData = {
   // Balance response from Payment Service
   balanceResponse: (winc = '1000000000000'): BalanceResponse => ({
     controlledWinc: winc,
@@ -35,7 +35,7 @@ export const mockTurboData = {
     winc,
   }),
 
-  // Folder upload response (TurboUploadFolderResponse)
+  // Folder upload response (LegacyUploadFolderResponse)
   uploadFolderResponse: (manifestId = 'J4C3y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8Y8') => ({
     fileResponses: [
       {
@@ -103,10 +103,10 @@ export const mockTurboData = {
 }
 
 /**
- * Default MSW handlers for Turbo Upload Service
- * Based on OpenAPI spec: https://turbo.ardrive.io/api-docs
+ * Default MSW handlers for Legacy Upload Service
+ * Based on the legacy upload OpenAPI fixture
  */
-export const turboUploadHandlers = [
+export const legacyUploadHandlers = [
   // Service info
   http.get('https://upload.ardrive.io/', async () =>
     HttpResponse.json({
@@ -122,12 +122,12 @@ export const turboUploadHandlers = [
 
   // Upload single data item (POST /v1/tx)
   http.post('https://upload.ardrive.io/v1/tx', async () =>
-    HttpResponse.json(mockTurboData.uploadResponse()),
+    HttpResponse.json(mockLegacyData.uploadResponse()),
   ),
 
   // Upload with specific token (POST /v1/tx/:token)
   http.post('https://upload.ardrive.io/v1/tx/:token', async ({ params: _params }) =>
-    HttpResponse.json(mockTurboData.uploadResponse()),
+    HttpResponse.json(mockLegacyData.uploadResponse()),
   ),
   http.get('https://up.arweave.net/', async () =>
     HttpResponse.json({
@@ -141,10 +141,10 @@ export const turboUploadHandlers = [
     }),
   ),
   http.post('https://up.arweave.net/v1/tx', async () =>
-    HttpResponse.json(mockTurboData.uploadResponse()),
+    HttpResponse.json(mockLegacyData.uploadResponse()),
   ),
   http.post('https://up.arweave.net/v1/tx/:token', async ({ params: _params }) =>
-    HttpResponse.json(mockTurboData.uploadResponse()),
+    HttpResponse.json(mockLegacyData.uploadResponse()),
   ),
 
   // Get data item status (GET /v1/tx/:id/status)
@@ -212,7 +212,7 @@ export const turboUploadHandlers = [
   // Multi-part upload: Finalize (POST /chunks/:token/:uploadId/-1)
   http.post('https://upload.ardrive.io/chunks/:token/:uploadId/-1', async ({ params }) =>
     HttpResponse.json({
-      data: mockTurboData.uploadResponse(params.uploadId as string),
+      data: mockLegacyData.uploadResponse(params.uploadId as string),
       id: params.uploadId,
     }),
   ),
@@ -221,7 +221,7 @@ export const turboUploadHandlers = [
   http.post('https://upload.ardrive.io/chunks/:token/:uploadId/finalize', async ({ params }) =>
     HttpResponse.json(
       {
-        data: mockTurboData.uploadResponse(params.uploadId as string),
+        data: mockLegacyData.uploadResponse(params.uploadId as string),
         id: params.uploadId,
       },
       { status: 202 },
@@ -238,23 +238,23 @@ export const turboUploadHandlers = [
 ]
 
 /**
- * Default MSW handlers for Turbo Payment Service
+ * Default MSW handlers for Legacy Payment Service
  * Based on OpenAPI spec: https://payment.ardrive.io/api-docs
  */
-export const turboPaymentHandlers = [
+export const legacyPaymentHandlers = [
   // Get balance (GET /v1/balance) - supports both endpoints
   http.get('https://payment.ardrive.io/v1/balance', async () =>
-    HttpResponse.json(mockTurboData.balanceResponse()),
+    HttpResponse.json(mockLegacyData.balanceResponse()),
   ),
 
   // Get balance with token path (GET /v1/account/balance/:token)
   http.get('https://payment.ardrive.io/v1/account/balance/:token', async ({ params: _params }) =>
-    HttpResponse.json(mockTurboData.balanceResponse()),
+    HttpResponse.json(mockLegacyData.balanceResponse()),
   ),
 
   // Get price for bytes (GET /v1/price/bytes/:byteCount)
   http.get('https://payment.ardrive.io/v1/price/bytes/:byteCount', async ({ params: _params }) =>
-    HttpResponse.json(mockTurboData.priceResponse()),
+    HttpResponse.json(mockLegacyData.priceResponse()),
   ),
 
   // Get winc for payment type/amount (GET /v1/price/:type/:amount)
@@ -264,7 +264,7 @@ export const turboPaymentHandlers = [
       adjustments: [],
       fees: [],
       quotedPaymentAmount: 1000,
-      winc: mockTurboData.priceResponse().winc,
+      winc: mockLegacyData.priceResponse().winc,
     }),
   ),
 ]
@@ -466,9 +466,9 @@ export const aoHandlers = [
 ]
 
 /**
- * All Turbo API handlers combined
+ * All Legacy Upload API handlers combined
  */
-export const turboHandlers = [...turboUploadHandlers, ...turboPaymentHandlers, ...aoHandlers]
+export const legacyHandlers = [...legacyUploadHandlers, ...legacyPaymentHandlers, ...aoHandlers]
 
 /**
  * Helper to create custom upload response
@@ -477,7 +477,7 @@ export const turboHandlers = [...turboUploadHandlers, ...turboPaymentHandlers, .
  */
 export function mockUploadSuccess(txId: string) {
   return http.post('https://upload.ardrive.io/v1/tx', async () =>
-    HttpResponse.json(mockTurboData.uploadResponse(txId)),
+    HttpResponse.json(mockLegacyData.uploadResponse(txId)),
   )
 }
 
@@ -491,26 +491,4 @@ export function mockUploadFailure(status = 500, message = 'Upload failed') {
   return http.post('https://upload.ardrive.io/v1/tx', async () =>
     HttpResponse.json({ error: message }, { status }),
   )
-}
-
-/**
- * Helper to create insufficient balance scenario
- * @param balanceWinc - Balance amount in winc (default: low balance)
- * @param costWinc - Upload cost in winc (default: higher than balance)
- * @returns Array of MSW handlers for insufficient balance scenario
- */
-export function mockInsufficientBalance(balanceWinc = '100', costWinc = '1000000') {
-  return [
-    // Mock low balance - both balance endpoints
-    http.get('https://payment.ardrive.io/v1/balance', async () =>
-      HttpResponse.json(mockTurboData.balanceResponse(balanceWinc)),
-    ),
-    http.get('https://payment.ardrive.io/v1/account/balance/:token', async () =>
-      HttpResponse.json(mockTurboData.balanceResponse(balanceWinc)),
-    ),
-    // Mock high upload cost (higher than balance)
-    http.get('https://payment.ardrive.io/v1/price/bytes/:byteCount', async () =>
-      HttpResponse.json(mockTurboData.priceResponse(costWinc)),
-    ),
-  ]
 }

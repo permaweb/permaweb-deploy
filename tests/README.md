@@ -17,7 +17,7 @@ tests/
 │   ├── upload-service.openapi.yaml
 │   └── payment-service.openapi.yaml
 ├── mocks/                    # MSW request handlers
-│   ├── turbo-handlers.ts    # Turbo API mocks
+│   ├── legacy-handlers.ts    # Legacy Upload API mocks
 │   └── README.md
 └── types/                    # Generated TypeScript types
     ├── payment-service.ts
@@ -94,12 +94,12 @@ Tests use [MSW](https://mswjs.io/) to intercept and mock HTTP requests at the ne
 
 The MSW server intercepts requests to:
 
-1. **Turbo Upload Service** (`upload.ardrive.io`)
+1. **Legacy Upload Service** (`upload.ardrive.io`)
    - File and folder uploads
    - Multi-part uploads
    - Upload status checks
 
-2. **Turbo Payment Service** (`payment.ardrive.io`)
+2. **Legacy Payment Service** (`payment.ardrive.io`)
    - Balance queries
    - Price calculations
    - Payment transactions
@@ -120,7 +120,7 @@ E2E tests use `@oclif/test` to run actual CLI commands with mocked network reque
 
 ### Adding New Mocks
 
-Add handlers to `mocks/turbo-handlers.ts`:
+Add handlers to `mocks/legacy-handlers.ts`:
 
 ```typescript
 export const myHandlers = [
@@ -137,7 +137,7 @@ export const myHandlers = [
 Then add to the combined handlers:
 
 ```typescript
-export const turboHandlers = [...turboUploadHandlers, ...turboPaymentHandlers, ...myHandlers]
+export const legacyHandlers = [...legacyUploadHandlers, ...legacyPaymentHandlers, ...myHandlers]
 ```
 
 ## Test Constants
@@ -163,10 +163,10 @@ MSW_VERBOSE=true pnpm test:e2e
 
 ### Check Mock Responses
 
-Inspect mock data generators in `mocks/turbo-handlers.ts`:
+Inspect mock data generators in `mocks/legacy-handlers.ts`:
 
 ```typescript
-export const mockTurboData = {
+export const mockLegacyData = {
   uploadResponse: (id = 'mock-tx-id') => ({ ... }),
   balanceResponse: (winc = '1000000000000') => ({ ... }),
   // ... more generators

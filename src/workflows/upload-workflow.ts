@@ -1,10 +1,3 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
-import {
-  TurboAuthenticatedConfiguration as LegacyAuthenticatedConfiguration,
-  TurboFactory as LegacyFactory,
-} from '@ardrive/turbo-sdk'
 import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
@@ -18,8 +11,8 @@ import {
   type UploadCost,
   type UploadSize,
 } from '../utils/hyperbeam-uploader.js'
+import { LegacyBundlerClient } from '../utils/legacy-bundler-uploader.js'
 import { expandPath } from '../utils/path.js'
-import { createSigner } from '../utils/signer.js'
 import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
 
 export interface UploadWorkflowConfig {
@@ -35,19 +28,6 @@ export interface UploadWorkflowConfig {
   'sig-type': string
   uploader?: string
   'uploader-type'?: string
-}
-
-function getFolderSize(folderPath: string): number {
-  let totalSize = 0
-
-  for (const item of fs.readdirSync(folderPath)) {
-    const fullPath = path.join(folderPath, item)
-    const stats = fs.statSync(fullPath)
-
-    totalSize += stats.isDirectory() ? getFolderSize(fullPath) : stats.size
-  }
-
-  return totalSize
 }
 
 export interface UploadWorkflowIo {
@@ -77,7 +57,6 @@ export async function runUploadWorkflow(
 
   const uploaderType = config['uploader-type'] ?? 'legacy'
   let uploadClient: UploadClient
-  let legacyClient: ReturnType<typeof LegacyFactory.authenticated> | undefined
 
   if (uploaderType === 'hyperbeam') {
     if (config['sig-type'] !== 'arweave') {
@@ -116,68 +95,14 @@ export async function runUploadWorkflow(
     })
     spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(config.uploader)})`)
   } else {
-    spinner.start('Creating signer')
-    const { signer, token } = createSigner(config['sig-type'] as SignerType, deployKey)
-    spinner.succeed(`Signer created (${chalk.cyan(config['sig-type'])})`)
-
     spinner.start('Initializing legacy bundler')
-
-    const legacyFactoryArgs: LegacyAuthenticatedConfiguration = { signer, token }
-
-    if (config.uploader) {
-      legacyFactoryArgs.uploadServiceConfig = { url: config.uploader }
-    }
-
-    legacyClient = LegacyFactory.authenticated(legacyFactoryArgs)
-    uploadClient = legacyClient as UploadClient
+    uploadClient = new LegacyBundlerClient({
+      deployKey,
+      sigType: config['sig-type'] as SignerType,
+      uploader: config.uploader ?? 'https://up.arweave.net',
+    })
 
     spinner.succeed('Legacy bundler initialized')
-  }
-
-  if (legacyClient) {
-    spinner.start('Checking legacy bundler credits for upload')
-
-    try {
-      const uploadBytes = config['deploy-file']
-        ? (() => {
-            const filePath = expandPath(config['deploy-file']!)
-            return fs.statSync(filePath).size
-          })()
-        : (() => {
-            const folderPath = expandPath(config['deploy-folder']!)
-            return getFolderSize(folderPath)
-          })()
-
-      const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
-
-      if (uploadBytes >= FREE_THRESHOLD_BYTES) {
-        const [uploadCost] = await legacyClient.getUploadCosts({ bytes: [uploadBytes] })
-        const balance = await legacyClient.getBalance()
-
-        const requiredWinc = BigInt(uploadCost.winc)
-        const currentWinc = BigInt(balance.winc)
-
-        if (requiredWinc > currentWinc) {
-          spinner.fail('Insufficient legacy bundler credits')
-
-          io.error(
-            [
-              'Insufficient legacy bundler credits for this upload.',
-              `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
-              '',
-              'Add bundler credits before retrying.',
-            ].join(' '),
-          )
-        }
-      }
-
-      spinner.succeed('Legacy bundler credits check passed')
-    } catch (balanceError) {
-      spinner.fail('Failed to check legacy bundler credits')
-      const errorMessage =
-        balanceError instanceof Error ? balanceError.message : String(balanceError)
-      io.error(`Failed to check legacy bundler credits: ${errorMessage}`)
-    }
   }
 
   let txOrManifestId: string

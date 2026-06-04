@@ -1,6 +1,12 @@
-import { ArweaveSigner, EthereumSigner } from '@ardrive/turbo-sdk'
+import { createRequire } from 'node:module'
 
 import type { SignerType } from '../types/index.js'
+
+const require = createRequire(import.meta.url)
+const { ArweaveSigner, EthereumSigner } = require('@dha-team/arbundles') as {
+  ArweaveSigner: new (jwk: Record<string, unknown>) => unknown
+  EthereumSigner: new (privateKey: string) => unknown
+}
 
 export function createSigner(sigType: SignerType, deployKey: string) {
   switch (sigType) {

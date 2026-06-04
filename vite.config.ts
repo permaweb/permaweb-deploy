@@ -27,7 +27,6 @@ export default defineConfig({
     },
     rollupOptions: {
       external: [
-        '@ardrive/turbo-sdk',
         '@permaweb/references',
         '@inquirer/prompts',
         '@oclif/core',

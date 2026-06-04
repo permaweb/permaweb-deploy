@@ -272,12 +272,11 @@ permaweb-deploy/
 - **`signer is not reference authority`:** use the wallet that controls the target reference.
 - **`deploy-folder does not exist`:** check the build output path.
 - **`deploy-file does not exist`:** check the file path.
-- **Insufficient legacy bundler credits:** fund the deployment wallet or use another legacy bundler endpoint.
+- **Legacy upload rejected:** check the upload endpoint response and retry with another legacy bundler if needed.
 
 ## Dependencies
 
 - **@permaweb/references** - namespace reference reads and writes.
-- **Legacy upload SDK** - legacy ANS-104 upload support.
 - **@dha-team/arbundles** - ANS-104 data item signing.
 - **@permaweb/aoconnect** - AO network connectivity.
 - **@permaweb/hyperbalance** - HyperBEAM auto-fund support.

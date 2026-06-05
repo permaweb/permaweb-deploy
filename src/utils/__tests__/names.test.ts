@@ -1,7 +1,14 @@
+import { createRequire } from 'node:module'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import { TEST_ARWEAVE_WALLET } from '../../../tests/constants.js'
 import { createNamesJwkSigner, resolveNamesReferenceId, validateNamesTarget } from '../names.js'
+
+const require = createRequire(import.meta.url)
+const { DataItem } = require('@dha-team/arbundles') as {
+  DataItem: new (raw: Buffer) => { tags: Array<{ name: string; value: string }> }
+}
 
 const arweaveMock = vi.hoisted(() => {
   const tx = {
@@ -213,9 +220,17 @@ describe('names utilities', () => {
   })
 
   describe('createNamesJwkSigner', () => {
-    it('creates an Arweave names signer and posts a direct Arweave transaction', async () => {
+    it('creates an Arweave names signer and posts a device-less set data item to the bundler', async () => {
       const deployKey = Buffer.from(JSON.stringify(TEST_ARWEAVE_WALLET)).toString('base64')
       const signer = createNamesJwkSigner('arweave', deployKey)
+      let signedItem: InstanceType<typeof DataItem> | undefined
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+        signedItem = new DataItem(Buffer.from(init?.body as Uint8Array))
+        return new Response(JSON.stringify({ id: 'posted-reference-data-item-id' }), {
+          status: 200,
+          statusText: 'OK',
+        })
+      })
 
       await expect(signer.address()).resolves.toBe(arweaveMock.walletAddress)
       const result = await signer.send({
@@ -228,14 +243,23 @@ describe('names utilities', () => {
         ],
       })
 
-      expect(result.id).toBe('posted-reference-tx-id')
-      expect(arweaveMock.createTransaction).toHaveBeenCalledWith({ data: ' ' }, TEST_ARWEAVE_WALLET)
-      expect(arweaveMock.tx.addTag).toHaveBeenCalledWith('device', 'reference@1.0')
-      expect(arweaveMock.tx.addTag).toHaveBeenCalledWith('reference-id', 'reference-id')
-      expect(arweaveMock.tx.addTag).toHaveBeenCalledWith('reference-value', 'manifest-id')
-      expect(arweaveMock.tx.addTag).toHaveBeenCalledWith('timestamp', '1')
-      expect(arweaveMock.sign).toHaveBeenCalledWith(arweaveMock.tx, TEST_ARWEAVE_WALLET)
-      expect(arweaveMock.post).toHaveBeenCalledWith(arweaveMock.tx)
+      expect(result.id).toBe('posted-reference-data-item-id')
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://up.arweave.net/tx',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(arweaveMock.createTransaction).not.toHaveBeenCalled()
+      expect(arweaveMock.sign).not.toHaveBeenCalled()
+      expect(arweaveMock.post).not.toHaveBeenCalled()
+      expect(
+        Object.fromEntries((signedItem?.tags ?? []).map((tag) => [tag.name, tag.value])),
+      ).toEqual({
+        'reference-id': 'reference-id',
+        'reference-value': 'manifest-id',
+        timestamp: '1',
+      })
+
+      fetchSpy.mockRestore()
     })
 
     it('rejects non-Arweave signers for names updates', () => {

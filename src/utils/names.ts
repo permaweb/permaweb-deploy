@@ -1,7 +1,26 @@
+import { createRequire } from 'node:module'
+
 import { PHASE2_NAMESPACE, ReferenceClient, type Signer } from '@permaweb/references'
 import Arweave from 'arweave'
 
 import type { SignerType } from '../types/index.js'
+
+const require = createRequire(import.meta.url)
+const { ArweaveSigner, DataItem, createData } = require('@dha-team/arbundles') as {
+  ArweaveSigner: new (jwk: Record<string, unknown>) => unknown
+  DataItem: new (raw: Buffer) => { id: string | Uint8Array }
+  createData: (
+    data: Buffer,
+    signer: unknown,
+    opts?: { tags?: Array<{ name: string; value: string }> },
+  ) => {
+    getRaw: () => Uint8Array
+    id?: string
+    sign: (signer: unknown) => Promise<void>
+  }
+}
+
+const DEFAULT_NAMES_BUNDLER = 'https://up.arweave.net'
 
 export interface NamesPublishConfig {
   deployKey: string
@@ -29,6 +48,40 @@ export interface NamesPublishResult {
   updateId: string
 }
 
+function toBase64Url(value: string | Uint8Array): string {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return Buffer.from(value).toString('base64url')
+}
+
+function namesBundlerTxUrl(bundler = DEFAULT_NAMES_BUNDLER): string {
+  const normalized = bundler.replace(/\/+$/, '')
+  return normalized.endsWith('/tx') ? normalized : `${normalized}/tx`
+}
+
+function responsePreview(body: string): string | undefined {
+  const preview = body.replaceAll(/\s+/g, ' ').trim()
+  if (!preview) {
+    return undefined
+  }
+
+  return preview.slice(0, 300)
+}
+
+function omitSetDeviceTag(tags: Array<{ name: string; value: string }>): Array<{
+  name: string
+  value: string
+}> {
+  const isSet = tags.some((tag) => tag.name === 'reference-id')
+  if (!isSet) {
+    return tags
+  }
+
+  return tags.filter((tag) => !(tag.name === 'device' && tag.value === 'reference@1.0'))
+}
+
 export function createNamesJwkSigner(sigType: SignerType, deployKey: string): Signer {
   if (sigType !== 'arweave') {
     throw new Error('Names updates currently require --sig-type arweave')
@@ -36,29 +89,48 @@ export function createNamesJwkSigner(sigType: SignerType, deployKey: string): Si
 
   const jwk = JSON.parse(Buffer.from(deployKey, 'base64').toString('utf8'))
   const arweave = Arweave.init({ host: 'arweave.net', port: 443, protocol: 'https' })
+  const signer = new ArweaveSigner(jwk)
 
   return {
     async address() {
       return arweave.wallets.jwkToAddress(jwk)
     },
-    async send({ data, tags }) {
-      const tx = await arweave.createTransaction(
-        { data: data && data.length > 0 ? data : ' ' },
-        jwk,
-      )
-      for (const tag of tags ?? []) {
-        tx.addTag(tag.name, tag.value)
-      }
+    async send({ data, tags }, opts = {}) {
+      const payload = Buffer.from(data && data.length > 0 ? data : ' ')
+      const item = createData(payload, signer, { tags: omitSetDeviceTag(tags ?? []) })
+      await item.sign(signer)
 
-      await arweave.transactions.sign(tx, jwk)
-      const response = await arweave.transactions.post(tx)
-      if (![200, 202].includes(response.status)) {
+      const raw = Buffer.from(item.getRaw())
+      const localId = item.id || toBase64Url(new DataItem(raw).id)
+      const fetchImpl = opts.fetch ?? fetch
+      const response = await fetchImpl(namesBundlerTxUrl(opts.bundler), {
+        body: raw,
+        headers: {
+          'content-length': String(raw.length),
+          'content-type': 'application/octet-stream',
+        },
+        method: 'POST',
+      })
+      const body = await response.text()
+
+      if (!response.ok) {
+        const preview = responsePreview(body)
         throw new Error(
-          `Reference update post failed with status ${response.status}: ${response.statusText}`,
+          `Reference update bundler upload failed with HTTP ${response.status}${preview ? `: ${preview}` : ''}`,
         )
       }
 
-      return { id: tx.id }
+      let id: string | undefined
+      if (body) {
+        try {
+          const parsed = JSON.parse(body) as { id?: unknown }
+          id = typeof parsed.id === 'string' ? parsed.id : undefined
+        } catch {
+          id = undefined
+        }
+      }
+
+      return { id: id ?? localId }
     },
   }
 }

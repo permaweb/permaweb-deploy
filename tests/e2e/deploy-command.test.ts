@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 
 import { runCommand } from '@oclif/test'
 import { http, HttpResponse } from 'msw'
@@ -8,6 +9,10 @@ import { TEST_ARWEAVE_WALLET, TEST_ETH_PRIVATE_KEY } from '../constants.js'
 import { server } from '../setup.js'
 
 const DEFAULT_LEGACY_UPLOADER = 'https://up.arweave.net'
+const require = createRequire(import.meta.url)
+const { DataItem } = require('@dha-team/arbundles') as {
+  DataItem: new (raw: Buffer) => { tags: Array<{ name: string; value: string }> }
+}
 
 function base64UrlToBuffer(value: string): Buffer {
   const pad = '='.repeat((4 - (value.length % 4)) % 4)
@@ -70,7 +75,7 @@ describe(
     it('should deploy and update a names reference by reference id', async () => {
       const authority = walletAddress(TEST_ARWEAVE_WALLET)
       let contentUploads = 0
-      let arweaveReferenceTxUploads = 0
+      let namesBundlerUploads = 0
 
       server.use(
         http.post('https://arweave.net/graphql', async ({ request }) => {
@@ -113,11 +118,16 @@ describe(
           expect(raw.byteLength).toBeGreaterThan(0)
           return HttpResponse.json({ id: `mock-legacy-upload-${contentUploads}` })
         }),
-        http.post('https://arweave.net/tx', async ({ request }) => {
-          arweaveReferenceTxUploads += 1
-          const body = await request.text()
-          expect(body.length).toBeGreaterThan(0)
-          return HttpResponse.json({}, { status: 200 })
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/tx`, async ({ request }) => {
+          namesBundlerUploads += 1
+          const raw = Buffer.from(await request.arrayBuffer())
+          const tags = Object.fromEntries(
+            new DataItem(raw).tags.map((tag) => [tag.name, tag.value]),
+          )
+          expect(raw.byteLength).toBeGreaterThan(0)
+          expect(tags.device).toBeUndefined()
+          expect(tags['reference-id']).toBe('direct-reference-id')
+          return HttpResponse.json({ id: 'mock-reference-update-id' })
         }),
       )
 
@@ -135,7 +145,7 @@ describe(
 
       expect(result.error).toBeUndefined()
       expect(contentUploads).toBe(1)
-      expect(arweaveReferenceTxUploads).toBe(1)
+      expect(namesBundlerUploads).toBe(1)
     })
 
     it('should validate names reference authority before uploading content', async () => {
@@ -177,7 +187,7 @@ describe(
           uploadAttempts += 1
           return HttpResponse.json({ id: 'unexpected-upload-id' })
         }),
-        http.post('https://arweave.net/tx', async () => {
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/tx`, async () => {
           namesUploads += 1
           return HttpResponse.json({}, { status: 200 })
         }),

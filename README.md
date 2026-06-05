@@ -38,7 +38,7 @@ base64 -i wallet.json
 
 Set the encoded value as `DEPLOY_KEY`, or pass `--wallet ./wallet.json`.
 
-Names updates currently require `--sig-type arweave`, because reference updates are signed as Arweave data items. Ethereum, Polygon, and KYVE signers remain supported for upload-only flows.
+Names updates currently require `--sig-type arweave`, because reference updates are signed as ANS-104 data items and posted to the names bundler endpoint. Ethereum, Polygon, and KYVE signers remain supported for upload-only flows.
 
 Use a dedicated deployment wallet and make sure it has enough upload credits/balance for the selected legacy bundler.
 
@@ -267,7 +267,7 @@ permaweb-deploy/
 ## Troubleshooting
 
 - **`DEPLOY_KEY environment variable not set`:** pass `--wallet`, pass `--private-key`, or set `DEPLOY_KEY`.
-- **`Names updates currently require --sig-type arweave`:** reference updates are signed as Arweave data items; use an Arweave JWK for names updates.
+- **`Names updates currently require --sig-type arweave`:** reference updates are signed as ANS-104 data items; use an Arweave JWK for names updates.
 - **`Name [...] does not exist in namespace ...`:** verify the namespace manifest contains the name or use `--reference-id`.
 - **`signer is not reference authority`:** use the wallet that controls the target reference.
 - **`deploy-folder does not exist`:** check the build output path.

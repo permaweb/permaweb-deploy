@@ -15,6 +15,7 @@ export default defineConfig({
         'prompts/wallet': resolve(__dirname, 'src/prompts/wallet.ts'),
         'utils/config-resolver': resolve(__dirname, 'src/utils/config-resolver.ts'),
         'utils/constants': resolve(__dirname, 'src/utils/constants.ts'),
+        'utils/permawebos-bundlers': resolve(__dirname, 'src/utils/permawebos-bundlers.ts'),
         'utils/names': resolve(__dirname, 'src/utils/names.ts'),
         'utils/path': resolve(__dirname, 'src/utils/path.ts'),
         'utils/validators': resolve(__dirname, 'src/utils/validators.ts'),

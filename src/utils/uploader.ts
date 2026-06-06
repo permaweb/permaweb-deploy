@@ -127,6 +127,7 @@ export async function uploadFolder(
   options?: {
     cache?: TransactionCache
     concurrency?: number
+    omitManifestDeviceTag?: boolean
     throwOnFailure?: boolean
   },
 ): Promise<FolderUploadResult> {
@@ -251,13 +252,14 @@ export async function uploadFolder(
 
   // Upload the manifest
   const manifestBuffer = Buffer.from(JSON.stringify(manifest))
+  const manifestTags = [
+    { name: 'App-Name', value: 'Permaweb-Deploy' },
+    { name: 'Content-Type', value: 'application/x.arweave-manifest+json' },
+    ...(options?.omitManifestDeviceTag ? [] : [{ name: 'Device', value: 'manifest@1.0' }]),
+  ]
   const manifestUploadResult = await uploadClient.uploadFile({
     dataItemOpts: {
-      tags: [
-        { name: 'App-Name', value: 'Permaweb-Deploy' },
-        { name: 'Content-Type', value: 'application/x.arweave-manifest+json' },
-        { name: 'Device', value: 'manifest@1.0' },
-      ],
+      tags: manifestTags,
     },
     fileSizeFactory: () => manifestBuffer.length,
     fileStreamFactory: () => Readable.from(manifestBuffer),

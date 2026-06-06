@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto'
+
 import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
@@ -7,12 +9,17 @@ import {
   type HyperbeamBundlerAutoFundOptions,
   HyperbeamBundlerClient,
   parseHyperbeamFundAmount,
+  preflightHyperbeamBundlerArBalance,
   type UploadClient,
   type UploadCost,
   type UploadSize,
 } from '../utils/hyperbeam-uploader.js'
 import { LegacyBundlerClient } from '../utils/legacy-bundler-uploader.js'
 import { expandPath } from '../utils/path.js'
+import {
+  type ActivePermawebOSBundler,
+  fetchActivePermawebOSBundlers,
+} from '../utils/permawebos-bundlers.js'
 import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
 
 export interface UploadWorkflowConfig {
@@ -38,6 +45,53 @@ export interface UploadWorkflowResult {
   cost?: UploadCost
   size?: UploadSize
   transactionId: string
+  uploader?: string
+}
+
+function randomizedUploaders(uploaders: ActivePermawebOSBundler[]): ActivePermawebOSBundler[] {
+  const candidates = [...uploaders]
+
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1)
+    const current = candidates[index]
+    const replacement = candidates[swapIndex]
+    candidates[index] = replacement
+    candidates[swapIndex] = current
+  }
+
+  return candidates
+}
+
+async function discoverUsableHyperbeamUploader(spinner: ReturnType<typeof ora>): Promise<string> {
+  spinner.start('Discovering active HyperBEAM uploaders')
+  const uploaders = randomizedUploaders(await fetchActivePermawebOSBundlers())
+
+  if (uploaders.length === 0) {
+    spinner.fail('No active HyperBEAM uploaders found')
+    throw new Error('No active HyperBEAM uploaders found')
+  }
+
+  const failures: string[] = []
+  for (const uploader of uploaders) {
+    try {
+      await preflightHyperbeamBundlerArBalance(uploader.url)
+      spinner.succeed(`Selected HyperBEAM bundler (${chalk.cyan(uploader.url)})`)
+      return uploader.url
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      failures.push(`${uploader.url}: ${message}`)
+    }
+  }
+
+  spinner.fail('No active HyperBEAM uploaders with spendable AR found')
+  throw new Error(
+    [
+      'No active HyperBEAM uploaders with spendable AR found.',
+      failures.length > 0 ? failures.join('\n') : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  )
 }
 
 /**
@@ -57,21 +111,20 @@ export async function runUploadWorkflow(
 
   const uploaderType = config['uploader-type'] ?? 'legacy'
   let uploadClient: UploadClient
+  let effectiveUploader: string | undefined
 
   if (uploaderType === 'hyperbeam') {
     if (config['sig-type'] !== 'arweave') {
       io.error('HyperBEAM uploads require --sig-type arweave')
     }
 
-    if (!config.uploader) {
-      io.error('HyperBEAM uploads require --uploader <node-url>')
-    }
+    effectiveUploader = config.uploader ?? (await discoverUsableHyperbeamUploader(spinner))
 
     let autoFund: HyperbeamBundlerAutoFundOptions | undefined
     if (config['hyperbeam-auto-fund']) {
       autoFund = {
         deployKey,
-        uploader: config.uploader,
+        uploader: effectiveUploader,
       }
       if (config['hyperbeam-ao-state-url']) autoFund.aoStateUrl = config['hyperbeam-ao-state-url']
       if (config['hyperbeam-ledger-id']) autoFund.ledgerId = config['hyperbeam-ledger-id']
@@ -88,18 +141,19 @@ export async function runUploadWorkflow(
       quote: {
         ledgerId: config['hyperbeam-ledger-id'],
         tokenId: config['hyperbeam-token-id'],
-        uploader: config.uploader,
+        uploader: effectiveUploader,
       },
       uploadPath: config['hyperbeam-upload-path'] ?? '/~bundler@1.0/item?codec-device=ans104@1.0',
-      uploader: config.uploader,
+      uploader: effectiveUploader,
     })
-    spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(config.uploader)})`)
+    spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(effectiveUploader)})`)
   } else {
+    effectiveUploader = config.uploader ?? 'https://up.arweave.net'
     spinner.start('Initializing legacy bundler')
     uploadClient = new LegacyBundlerClient({
       deployKey,
       sigType: config['sig-type'] as SignerType,
-      uploader: config.uploader ?? 'https://up.arweave.net',
+      uploader: effectiveUploader,
     })
 
     spinner.succeed('Legacy bundler initialized')
@@ -145,6 +199,7 @@ export async function runUploadWorkflow(
       const uploadResult: FolderUploadResult = await uploadFolder(uploadClient, folderPath, {
         cache,
         concurrency: config['hyperbeam-auto-fund'] ? 1 : undefined,
+        omitManifestDeviceTag: uploaderType === 'hyperbeam',
         throwOnFailure: true,
       })
 
@@ -188,5 +243,6 @@ export async function runUploadWorkflow(
     cost,
     size,
     transactionId: txOrManifestId,
+    uploader: effectiveUploader,
   }
 }

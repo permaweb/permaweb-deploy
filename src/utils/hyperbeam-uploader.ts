@@ -310,7 +310,7 @@ export function hyperbeamBundlerLink(uploader: string, id: string, isManifest = 
   return new URL(`${encodeURIComponent(id)}${isManifest ? '/' : ''}`, normalizedBase).toString()
 }
 
-async function preflightHyperbeamBundlerArBalance(uploader: string): Promise<void> {
+export async function preflightHyperbeamBundlerArBalance(uploader: string): Promise<void> {
   const nodeUrl = uploader.replace(/\/+$/, '')
   const addressRes = await fetch(`${nodeUrl}/~meta@1.0/info/address`)
   if (!addressRes.ok) {
@@ -356,6 +356,7 @@ function responseId(headers: Headers, body: string): string | undefined {
 export async function postHyperbeamDataItem(
   uploadUrl: string,
   raw: Buffer | Uint8Array,
+  localId?: string,
 ): Promise<HyperbeamDataItemPostResult> {
   const res = await fetch(uploadUrl, {
     body: raw,
@@ -369,8 +370,9 @@ export async function postHyperbeamDataItem(
 
   if (!res.ok) {
     const preview = responsePreview(body)
+    const itemContext = localId ? ` for local data item ${localId}` : ''
     throw new Error(
-      `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+      `HyperBEAM bundler upload failed${itemContext} with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
     )
   }
 
@@ -401,6 +403,14 @@ function autoFundFailureNote(message: string): string {
   return 'Check the wallet or node ledger before retrying auto-fund; the AO transfer may already have been submitted.'
 }
 
+function autoFundUnavailableMessage(message: string): string {
+  return [
+    'HyperBEAM auto-fund was requested, but this node is not hyperbalance-compatible for this upload.',
+    `Auto-fund compatibility check failed: ${message}`,
+    'Attempted direct upload instead.',
+  ].join('\n')
+}
+
 export class HyperbeamBundlerClient implements UploadClient {
   private readonly autoFund?: HyperbeamBundlerAutoFundOptions
   private readonly quote: HyperbeamBundlerQuoteOptions
@@ -422,9 +432,6 @@ export class HyperbeamBundlerClient implements UploadClient {
   }
 
   async uploadFile(args: UploadFileArgs): Promise<{ id: string } & UploadClientResult> {
-    this.seedPreflight ??= preflightHyperbeamBundlerArBalance(this.uploader)
-    await this.seedPreflight
-
     const data = args.file
       ? typeof args.file === 'string'
         ? fs.readFileSync(args.file)
@@ -438,32 +445,17 @@ export class HyperbeamBundlerClient implements UploadClient {
     const raw = Buffer.from(item.getRaw())
     const localId = item.id || toBase64Url(new DataItem(raw).id)
     const size: UploadSize = { payloadBytes: data.length, signedBytes: raw.length }
+    let autoFundUnavailable: string | undefined
+    let autoFundQuote: { amount: bigint; ledgerId?: string; tokenId?: string } | undefined
     let cost: UploadCost | undefined
 
     if (this.autoFund) {
-      const quote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
-      cost = { amount: quote.amount, token: 'AO' }
       try {
-        await autoFundQuotedHyperbeamLedger({
-          ...this.autoFund,
-          ledgerId: this.autoFund.ledgerId ?? quote.ledgerId,
-          minimumBalance: this.autoFund.minimumBalance ?? quote.amount,
-          signedBytes: raw.length,
-          tokenId: this.autoFund.tokenId ?? quote.tokenId,
-        })
+        autoFundQuote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
+        cost = { amount: autoFundQuote.amount, token: 'AO' }
       } catch (error) {
-        const message = cleanAutoFundErrorMessage(
+        autoFundUnavailable = cleanAutoFundErrorMessage(
           error instanceof Error ? error.message : String(error),
-        )
-        throw new Error(
-          [
-            `HyperBEAM auto-fund failed: ${message}`,
-            `Required upload credit: ${formatAoAmount(cost.amount)}`,
-            autoFundFailureNote(message),
-            await this.paymentHint(false),
-          ]
-            .filter(Boolean)
-            .join('\n\n'),
         )
       }
     } else {
@@ -475,13 +467,55 @@ export class HyperbeamBundlerClient implements UploadClient {
       }
     }
 
+    this.seedPreflight ??= preflightHyperbeamBundlerArBalance(this.uploader)
+    await this.seedPreflight
+
+    if (this.autoFund && autoFundQuote) {
+      try {
+        await autoFundQuotedHyperbeamLedger({
+          ...this.autoFund,
+          ledgerId: this.autoFund.ledgerId ?? autoFundQuote.ledgerId,
+          minimumBalance: this.autoFund.minimumBalance ?? autoFundQuote.amount,
+          signedBytes: raw.length,
+          tokenId: this.autoFund.tokenId ?? autoFundQuote.tokenId,
+        })
+      } catch (error) {
+        const message = cleanAutoFundErrorMessage(
+          error instanceof Error ? error.message : String(error),
+        )
+        throw new Error(
+          [
+            `HyperBEAM auto-fund failed: ${message}`,
+            `Required upload credit: ${formatAoAmount(cost?.amount ?? autoFundQuote.amount)}`,
+            autoFundFailureNote(message),
+            await this.paymentHint(false),
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+        )
+      }
+    }
+
     let posted: HyperbeamDataItemPostResult
     try {
-      posted = await postHyperbeamDataItem(this.uploadUrl, raw)
+      posted = await postHyperbeamDataItem(this.uploadUrl, raw, localId)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      const paymentHint = message.includes('HTTP 402') ? await this.paymentHint() : undefined
-      throw new Error([message, paymentHint].filter(Boolean).join('\n\n'))
+      const needsPayment = message.includes('HTTP 402')
+      const paymentHint = needsPayment
+        ? await this.paymentHint(autoFundUnavailable ? false : undefined)
+        : undefined
+      throw new Error(
+        [
+          message,
+          needsPayment && autoFundUnavailable
+            ? autoFundUnavailableMessage(autoFundUnavailable)
+            : undefined,
+          paymentHint,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      )
     }
 
     return { cost, id: posted.id || localId, size }

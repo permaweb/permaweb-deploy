@@ -131,29 +131,27 @@ export default class Deploy extends Command {
       this.log(chalk.bold(chalk.cyan('\nStarting deployment...\n')))
       try {
         if (!deployConfig['use-names']) {
-          const { transactionId: txOrManifestId } = await runUploadWorkflow(
-            deployKey,
-            deployConfig,
-            {
-              error: (msg) => this.error(msg),
-            },
-          )
+          const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
+            error: (msg) => this.error(msg),
+          })
+          const txOrManifestId = uploadResult.transactionId
+          const effectiveUploader = uploadResult.uploader ?? deployConfig.uploader
 
           this.log('')
 
           const bundlerLink =
-            deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
+            deployConfig['uploader-type'] === 'hyperbeam' && effectiveUploader
               ? hyperbeamBundlerLink(
-                  deployConfig.uploader,
+                  effectiveUploader,
                   txOrManifestId,
                   !deployConfig['deploy-file'],
                 )
               : undefined
 
           const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
-          if (deployConfig.uploader) {
+          if (effectiveUploader) {
             rows.push(
-              ['Bundler service', chalk.cyan(deployConfig.uploader)],
+              ['Bundler service', chalk.cyan(effectiveUploader)],
               ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
             )
           }
@@ -196,9 +194,11 @@ export default class Deploy extends Command {
 
         spinner.succeed('Names reference validated')
 
-        const { transactionId: txOrManifestId } = await runUploadWorkflow(deployKey, deployConfig, {
+        const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
           error: (msg) => this.error(msg),
         })
+        const txOrManifestId = uploadResult.transactionId
+        const effectiveUploader = uploadResult.uploader ?? deployConfig.uploader
 
         this.log('')
 
@@ -220,18 +220,14 @@ export default class Deploy extends Command {
         spinner.succeed('Names reference updated')
 
         const bundlerLink =
-          deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
-            ? hyperbeamBundlerLink(
-                deployConfig.uploader,
-                txOrManifestId,
-                !deployConfig['deploy-file'],
-              )
+          deployConfig['uploader-type'] === 'hyperbeam' && effectiveUploader
+            ? hyperbeamBundlerLink(effectiveUploader, txOrManifestId, !deployConfig['deploy-file'])
             : undefined
 
         const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
-        if (deployConfig.uploader) {
+        if (effectiveUploader) {
           rows.push(
-            ['Bundler service', chalk.cyan(deployConfig.uploader)],
+            ['Bundler service', chalk.cyan(effectiveUploader)],
             ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
           )
         }

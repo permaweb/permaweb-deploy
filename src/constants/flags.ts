@@ -170,7 +170,7 @@ export const globalFlags = {
   uploader: createFlagConfig<string | undefined>({
     flag: Flags.string({
       description:
-        'Base URL of the bundler service to use. Legacy uploads default to https://up.arweave.net; HyperBEAM uploads require an explicit node URL.',
+        'Base URL of the bundler service to use. Legacy uploads default to https://up.arweave.net; HyperBEAM uploads discover a PermawebOS uploader when omitted.',
       required: false,
     }),
   }),

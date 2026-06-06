@@ -110,8 +110,16 @@ HyperBEAM upload:
 permaweb-deploy upload \
   --wallet ./wallet.json \
   --deploy-folder ./dist \
-  --uploader-type hyperbeam \
-  --uploader https://hyperbeam.example.com
+  --uploader-type hyperbeam
+```
+
+When `--uploader-type hyperbeam` is set and `--uploader` is omitted, the CLI discovers active [PermawebOS HyperBEAM](https://ao.arweave.net/#/stake/bundle) uploaders and randomly selects a usable node. HyperBEAM uploads always check that the selected or pinned node wallet has more than 0 AR before posting data, because the node must be able to seed data to Arweave. Pass `--uploader https://hyperbeam.example.com` to pin a specific node and bypass discovery.
+
+List discoverable HyperBEAM uploaders:
+
+```bash
+permaweb-deploy hyperbeam-uploaders
+permaweb-deploy hyperbeam-uploaders --json
 ```
 
 HyperBEAM auto-fund:
@@ -121,7 +129,6 @@ permaweb-deploy upload \
   --wallet ./wallet.json \
   --deploy-folder ./dist \
   --uploader-type hyperbeam \
-  --uploader https://hyperbeam.example.com \
   --hyperbeam-auto-fund
 ```
 
@@ -138,7 +145,7 @@ HyperBEAM uploads require an Arweave JWK signer. The default route is `/~bundler
 - `--private-key, -k`: private key or JWK JSON string.
 - `--no-dedupe`: disable dedupe cache.
 - `--dedupe-cache-max-entries`: LRU cache size. Default: `10000`.
-- `--uploader`: bundler service base URL. Default: `https://up.arweave.net`.
+- `--uploader`: bundler service base URL. Legacy uploads default to `https://up.arweave.net`; HyperBEAM uploads auto-discover an active PermawebOS uploader when omitted.
 - `--uploader-type`: upload protocol, `legacy` or `hyperbeam`. Default: `legacy`.
 - `--hyperbeam-upload-path`: HyperBEAM bundler route.
 - `--hyperbeam-auto-fund`: fund the HyperBEAM local ledger before upload.

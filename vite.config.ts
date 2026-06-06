@@ -7,6 +7,7 @@ export default defineConfig({
       entry: {
         index: resolve(__dirname, 'src/index.ts'),
         'commands/deploy': resolve(__dirname, 'src/commands/deploy.ts'),
+        'commands/hyperbeam-uploaders': resolve(__dirname, 'src/commands/hyperbeam-uploaders.ts'),
         'commands/upload': resolve(__dirname, 'src/commands/upload.ts'),
         'workflows/upload-workflow': resolve(__dirname, 'src/workflows/upload-workflow.ts'),
         'constants/flags': resolve(__dirname, 'src/constants/flags.ts'),
@@ -15,6 +16,10 @@ export default defineConfig({
         'prompts/wallet': resolve(__dirname, 'src/prompts/wallet.ts'),
         'utils/config-resolver': resolve(__dirname, 'src/utils/config-resolver.ts'),
         'utils/constants': resolve(__dirname, 'src/utils/constants.ts'),
+        'utils/hyperbeam-uploaders-cli': resolve(
+          __dirname,
+          'src/utils/hyperbeam-uploaders-cli.ts',
+        ),
         'utils/permawebos-bundlers': resolve(__dirname, 'src/utils/permawebos-bundlers.ts'),
         'utils/names': resolve(__dirname, 'src/utils/names.ts'),
         'utils/path': resolve(__dirname, 'src/utils/path.ts'),

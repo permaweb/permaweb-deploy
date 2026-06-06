@@ -122,13 +122,14 @@ export default class Upload extends Command {
           error: (msg) => this.error(msg),
         })
         const txOrManifestId = uploadResult.transactionId
+        const effectiveUploader = uploadResult.uploader ?? uploadCfg.uploader
 
         this.log('')
 
         const uploadSize = uploadResult.size
         const bundlerLink =
-          uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
-            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId, !uploadCfg['deploy-file'])
+          uploadCfg['uploader-type'] === 'hyperbeam' && effectiveUploader
+            ? hyperbeamBundlerLink(effectiveUploader, txOrManifestId, !uploadCfg['deploy-file'])
             : undefined
 
         const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
@@ -140,9 +141,9 @@ export default class Upload extends Command {
           rows.push(['Upload cost', chalk.blue(formatUploadCost(uploadResult.cost))])
         }
 
-        if (uploadCfg.uploader) {
+        if (effectiveUploader) {
           rows.push(
-            ['Bundler service', chalk.cyan(uploadCfg.uploader)],
+            ['Bundler service', chalk.cyan(effectiveUploader)],
             ['Uploader type', chalk.cyan(uploadCfg['uploader-type'])],
           )
         }

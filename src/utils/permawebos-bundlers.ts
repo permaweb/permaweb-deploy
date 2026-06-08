@@ -1,6 +1,7 @@
 export const DEFAULT_PERMAWEBOS_BUNDLER_GATEWAY = 'https://push-9.forward.computer'
 export const DEFAULT_PERMAWEBOS_BUNDLER_STAKING_PROCESS =
   'Xv7dvev8_dJVwW7k_VGGdHpRqWpgSCgK4vzJmnBkg5M'
+const EXCLUDED_PERMAWEBOS_BUNDLER_URLS = new Set(['https://dev-1.forward.computer'])
 
 export interface ActivePermawebOSBundler {
   address: string
@@ -67,7 +68,7 @@ export async function fetchActivePermawebOSBundlers(
         ? (registered[address] as RegisteredRecord)
         : undefined
       const url = normalizeBundlerUrl(normalizeScalar(registeredRecord?.location))
-      if (!url) return []
+      if (!url || isExcludedBundlerUrl(url)) return []
 
       return [
         {
@@ -147,6 +148,10 @@ function getBundlerAddress(record: ActiveRecord): string {
 function normalizeBundlerUrl(value: string): string {
   if (!/^https?:\/\//i.test(value)) return ''
   return value.replace(/\/+$/, '')
+}
+
+function isExcludedBundlerUrl(url: string): boolean {
+  return EXCLUDED_PERMAWEBOS_BUNDLER_URLS.has(url.toLowerCase())
 }
 
 function normalizeScalar(value: unknown): string {

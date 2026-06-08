@@ -23,7 +23,7 @@ function createFetch(state: Record<string, unknown>) {
 }
 
 describe('PermawebOS Bundler discovery', () => {
-  it('returns active bundlers using the same active and registered mirrors as ao-site', async () => {
+  it('returns active bundlers while excluding known unusable uploaders', async () => {
     const fetch = createFetch({
       active: {
         commitments: {},
@@ -58,15 +58,6 @@ describe('PermawebOS Bundler discovery', () => {
     })
 
     await expect(fetchActivePermawebOSBundlers({ fetch })).resolves.toEqual([
-      {
-        address: 'node-a',
-        owner: 'owner-a',
-        registeredAt: 1_779_926_378_019,
-        ring: 'permawebos-v0.1-gold',
-        stake: '25000000000000',
-        stakedAt: 1_779_926_407_525,
-        url: 'https://dev-1.forward.computer',
-      },
       {
         address: 'node-b',
         owner: 'owner-b',

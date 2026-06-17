@@ -2,19 +2,82 @@
 
 `permaweb-deploy` uploads static sites, folders, or individual files to Arweave and can optionally update a Permaweb Name `~reference@1.0` ref value with the deployed transaction or manifest ID.
 
-The CLI uses legacy ANS-104 bundlers for the default upload path, supports HyperBEAM bundlers when selected explicitly, and publishes names updates through `@permaweb/references`.
+The CLI uses legacy ANS-104 bundlers for the default upload path, supports HyperBEAM bundlers when selected explicitly, and publishes names updates through [`@permaweb/references`](https://www.npmjs.com/package/@permaweb/references).
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation Options](#installation-options)
+- [Prerequisites](#prerequisites)
+- [CLI Usage](#cli-usage)
+- [Names Publishing](#names-publishing)
+- [Bundlers](#bundlers)
+- [Command Options](#command-options)
+- [Deduplication](#deduplication)
+- [Package Scripts](#package-scripts)
+- [GitHub Action](#github-action)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [Dependencies](#dependencies)
+- [License](#license)
 
 ## Features
 
 - **Arweave uploads:** Upload a folder or a single file.
-- **Names publishing:** Update a Permaweb Names reference-id's value after upload
+- **Names publishing:** Update a Permaweb Names reference-id's value after upload.
 - **Legacy bundler uploads:** Use legacy ANS-104 upload endpoints by default.
 - **HyperBEAM uploads:** Sign ANS-104 items and post them to a HyperBEAM bundler route.
 - **Arweave manifests:** Create manifest `0.2.0` documents for folder deployments, with SPA fallback detection.
 - **Dedupe cache:** Reuse unchanged uploads from `.permaweb-deploy/transaction-cache.json`.
 - **GitHub Action:** Deploy from CI and optionally update a namespace reference.
 
-## Installation
+## Quick Start
+
+Install the CLI in your project:
+
+```bash
+pnpm add -D permaweb-deploy
+```
+
+Make your Arweave JWK available with either `DEPLOY_KEY` or `--wallet`:
+
+```bash
+export DEPLOY_KEY=$(base64 -i wallet.json)
+```
+
+If you prefer not to export a key, pass `--wallet ./wallet.json` to the commands below.
+
+Upload a built static folder:
+
+```bash
+permaweb-deploy upload --deploy-folder ./dist
+```
+
+Deploy and update a Permaweb Name:
+
+```bash
+permaweb-deploy deploy --use-names --name my-app --deploy-folder ./dist
+```
+
+Or deploy and update a direct reference ID:
+
+```bash
+permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --deploy-folder ./dist
+```
+
+For repeatable project scripts, add a build-and-deploy command:
+
+```json
+{
+  "scripts": {
+    "build": "vite build",
+    "deploy": "pnpm build && permaweb-deploy deploy --use-names --name my-app"
+  }
+}
+```
+
+## Installation Options
 
 ```bash
 pnpm add -D permaweb-deploy
@@ -42,7 +105,7 @@ Names updates currently require `--sig-type arweave`, because reference updates 
 
 Use a dedicated deployment wallet and make sure it has enough upload credits/balance for the selected legacy bundler.
 
-## Usage
+## CLI Usage
 
 Upload only:
 
@@ -64,7 +127,7 @@ Upload and update a direct reference ID:
 permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet.json
 ```
 
-dev advanced: using a custom namespace root reference or namespace manifest ID:
+Advanced: use a custom namespace root reference or namespace manifest ID:
 
 ```bash
 permaweb-deploy deploy \

@@ -2,7 +2,11 @@ import fs from 'node:fs'
 
 import { Command } from '@oclif/core'
 
-import { type UploadConfig, uploadFlagConfigs } from '../constants/flags.js'
+import {
+  DEFAULT_LEGACY_UPLOADER,
+  type UploadConfig,
+  uploadFlagConfigs,
+} from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import { chalk } from '../utils/chalk.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
@@ -20,14 +24,12 @@ import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 export default class Upload extends Command {
   static override args = {}
 
-  static override description = 'Upload a file or folder to Arweave via Turbo without updating ArNS'
+  static override description = 'Upload a file or folder to Arweave without updating names'
 
   static override examples = [
     '<%= config.bin %> upload --wallet ./wallet.json',
     '<%= config.bin %> upload --wallet ./wallet.json --deploy-folder ./dist',
     '<%= config.bin %> upload --wallet ./wallet.json --deploy-file ./dist/index.html',
-    '<%= config.bin %> upload --private-key "$(cat wallet.json)" --on-demand ario --max-token-amount 1.5',
-    '<%= config.bin %> upload --wallet ./wallet.json --uploader https://up.arweave.net',
     '<%= config.bin %> upload --wallet ./wallet.json --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
   ]
 
@@ -63,6 +65,9 @@ export default class Upload extends Command {
       const effectiveCacheMaxEntries = baseConfig['no-dedupe']
         ? 0
         : baseConfig['dedupe-cache-max-entries']
+      const uploader =
+        baseConfig.uploader ??
+        (baseConfig['uploader-type'] === 'legacy' ? DEFAULT_LEGACY_UPLOADER : undefined)
 
       const uploadCfg = {
         'dedupe-cache-max-entries': effectiveCacheMaxEntries,
@@ -74,10 +79,8 @@ export default class Upload extends Command {
         'hyperbeam-ledger-id': baseConfig['hyperbeam-ledger-id'],
         'hyperbeam-token-id': baseConfig['hyperbeam-token-id'],
         'hyperbeam-upload-path': baseConfig['hyperbeam-upload-path'],
-        'max-token-amount': baseConfig['max-token-amount'],
-        'on-demand': baseConfig['on-demand'],
         'sig-type': baseConfig['sig-type'],
-        uploader: baseConfig.uploader,
+        uploader,
         'uploader-type': baseConfig['uploader-type'],
       }
 
@@ -119,13 +122,14 @@ export default class Upload extends Command {
           error: (msg) => this.error(msg),
         })
         const txOrManifestId = uploadResult.transactionId
+        const effectiveUploader = uploadResult.uploader ?? uploadCfg.uploader
 
         this.log('')
 
         const uploadSize = uploadResult.size
         const bundlerLink =
-          uploadCfg['uploader-type'] === 'hyperbeam' && uploadCfg.uploader
-            ? hyperbeamBundlerLink(uploadCfg.uploader, txOrManifestId, !uploadCfg['deploy-file'])
+          uploadCfg['uploader-type'] === 'hyperbeam' && effectiveUploader
+            ? hyperbeamBundlerLink(effectiveUploader, txOrManifestId, !uploadCfg['deploy-file'])
             : undefined
 
         const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
@@ -137,9 +141,9 @@ export default class Upload extends Command {
           rows.push(['Upload cost', chalk.blue(formatUploadCost(uploadResult.cost))])
         }
 
-        if (uploadCfg.uploader) {
+        if (effectiveUploader) {
           rows.push(
-            ['Bundler service', chalk.cyan(uploadCfg.uploader)],
+            ['Bundler service', chalk.cyan(effectiveUploader)],
             ['Uploader type', chalk.cyan(uploadCfg['uploader-type'])],
           )
         }

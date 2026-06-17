@@ -1,34 +1,35 @@
 import fs from 'node:fs'
 
-import { ANT, AOProcess, ARIO } from '@ar.io/sdk'
 import { Command } from '@oclif/core'
-import { connect } from '@permaweb/aoconnect'
 import ora from 'ora'
 
-import { type DeployConfig, deployFlagConfigs } from '../constants/flags.js'
-import { promptAdvancedOptions } from '../prompts/arns.js'
+import {
+  DEFAULT_LEGACY_UPLOADER,
+  type DeployConfig,
+  deployFlagConfigs,
+} from '../constants/flags.js'
 import { getWalletConfig } from '../prompts/wallet.js'
 import type { SignerType } from '../types/index.js'
 import { chalk } from '../utils/chalk.js'
 import { extractFlags, resolveConfig } from '../utils/config-resolver.js'
 import { type DisplayRow, formatDisplayRows, formatUploadError } from '../utils/display.js'
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
+import { preflightNamesUpdate, publishNamesUpdate } from '../utils/names.js'
 import { expandPath } from '../utils/path.js'
-import { createSigner } from '../utils/signer.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
 
 export default class Deploy extends Command {
   static override args = {}
 
-  static override description = 'Deploy an application to the permaweb with optional ArNS update'
+  static override description = 'Deploy an application to the permaweb with optional names update'
 
   static override examples = [
     '<%= config.bin %> deploy --wallet ./wallet.json',
     '<%= config.bin %> deploy --wallet ./wallet.json --deploy-folder ./dist',
     '<%= config.bin %> deploy --wallet ./wallet.json --deploy-file ./dist/index.html',
     '<%= config.bin %> deploy --wallet ./wallet.json --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
-    '<%= config.bin %> deploy --wallet ./wallet.json --use-arns --arns-name my-app',
-    '<%= config.bin %> deploy --wallet ./wallet.json --use-arns --arns-name my-app --undername staging',
+    '<%= config.bin %> deploy --wallet ./wallet.json --use-names --name my-app',
+    '<%= config.bin %> deploy --wallet ./wallet.json --use-names --reference-id REFERENCE_ID',
   ]
 
   static override flags = extractFlags(deployFlagConfigs)
@@ -37,11 +38,11 @@ export default class Deploy extends Command {
     try {
       const { flags } = await this.parse(Deploy)
 
-      const useArns = Boolean(flags['use-arns'] || flags['arns-name'])
-      const interactive = useArns && !flags['arns-name']
+      const useNames = Boolean(flags['use-names'] || flags.name || flags['reference-id'])
+      const interactive = useNames && !flags.name && !flags['reference-id']
 
       if (interactive) {
-        this.log(chalk.bold(chalk.cyan('\nInteractive ArNS Deployment Mode\n')))
+        this.log(chalk.bold(chalk.cyan('\nInteractive Names Deployment Mode\n')))
       }
 
       const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
@@ -66,28 +67,14 @@ export default class Deploy extends Command {
         }
       }
 
-      let advancedOptions:
-        | {
-            arioProcess: string
-            maxTokenAmount?: string
-            onDemand?: string
-            ttlSeconds: string
-            undername: string
-          }
-        | undefined
-
-      if (interactive) {
-        const options = await promptAdvancedOptions()
-        advancedOptions = options || undefined
-      }
-
       const effectiveCacheMaxEntries = baseConfig['no-dedupe']
         ? 0
         : baseConfig['dedupe-cache-max-entries']
+      const uploader =
+        baseConfig.uploader ??
+        (baseConfig['uploader-type'] === 'legacy' ? DEFAULT_LEGACY_UPLOADER : undefined)
 
       const deployConfig: DeployConfig = {
-        'ario-process': advancedOptions?.arioProcess || baseConfig['ario-process'],
-        'arns-name': baseConfig['arns-name'],
         'dedupe-cache-max-entries': effectiveCacheMaxEntries,
         'deploy-file': baseConfig['deploy-file'],
         'deploy-folder': baseConfig['deploy-folder'],
@@ -97,16 +84,17 @@ export default class Deploy extends Command {
         'hyperbeam-ledger-id': baseConfig['hyperbeam-ledger-id'],
         'hyperbeam-token-id': baseConfig['hyperbeam-token-id'],
         'hyperbeam-upload-path': baseConfig['hyperbeam-upload-path'],
-        'max-token-amount': advancedOptions?.maxTokenAmount || baseConfig['max-token-amount'],
+        name: baseConfig.name,
+        'names-gateway': baseConfig['names-gateway'],
+        'names-graphql': baseConfig['names-graphql'],
+        'names-namespace': baseConfig['names-namespace'],
         'no-dedupe': baseConfig['no-dedupe'],
-        'on-demand': advancedOptions?.onDemand || baseConfig['on-demand'],
         'private-key': walletConfig.privateKey,
+        'reference-id': baseConfig['reference-id'],
         'sig-type': baseConfig['sig-type'],
-        'ttl-seconds': advancedOptions?.ttlSeconds || baseConfig['ttl-seconds'],
-        undername: advancedOptions?.undername || baseConfig.undername,
-        uploader: baseConfig.uploader,
+        uploader,
         'uploader-type': baseConfig['uploader-type'],
-        'use-arns': useArns,
+        'use-names': useNames,
         wallet: walletConfig.wallet,
       }
 
@@ -142,30 +130,28 @@ export default class Deploy extends Command {
 
       this.log(chalk.bold(chalk.cyan('\nStarting deployment...\n')))
       try {
-        if (!deployConfig['use-arns']) {
-          const { transactionId: txOrManifestId } = await runUploadWorkflow(
-            deployKey,
-            deployConfig,
-            {
-              error: (msg) => this.error(msg),
-            },
-          )
+        if (!deployConfig['use-names']) {
+          const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
+            error: (msg) => this.error(msg),
+          })
+          const txOrManifestId = uploadResult.transactionId
+          const effectiveUploader = uploadResult.uploader ?? deployConfig.uploader
 
           this.log('')
 
           const bundlerLink =
-            deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
+            deployConfig['uploader-type'] === 'hyperbeam' && effectiveUploader
               ? hyperbeamBundlerLink(
-                  deployConfig.uploader,
+                  effectiveUploader,
                   txOrManifestId,
                   !deployConfig['deploy-file'],
                 )
               : undefined
 
           const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
-          if (deployConfig.uploader) {
+          if (effectiveUploader) {
             rows.push(
-              ['Bundler service', chalk.cyan(deployConfig.uploader)],
+              ['Bundler service', chalk.cyan(effectiveUploader)],
               ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
             )
           }
@@ -182,88 +168,66 @@ export default class Deploy extends Command {
           return
         }
 
-        const arioProcess = deployConfig['ario-process']
-        const arnsName = deployConfig['arns-name']
-        if (!arnsName) {
-          this.error('--use-arns requires --arns-name')
+        if (deployConfig['sig-type'] !== 'arweave') {
+          this.error('Names updates currently require --sig-type arweave')
+        }
+
+        if (!deployConfig.name && !deployConfig['reference-id']) {
+          this.error('--use-names requires --name or --reference-id')
         }
 
         const spinner = ora()
 
-        spinner.start('Initializing ARIO')
-
-        const ao = connect({
-          CU_URL: 'https://cu.ardrive.io',
-          MODE: 'legacy',
-          MU_URL: 'https://mu.ao-testnet.xyz',
+        spinner.start('Validating names reference')
+        const namesTarget = await preflightNamesUpdate({
+          deployKey,
+          gateway: deployConfig['names-gateway'],
+          graphql: deployConfig['names-graphql'],
+          name: deployConfig.name,
+          namespace: deployConfig['names-namespace'],
+          referenceId: deployConfig['reference-id'],
+          sigType: deployConfig['sig-type'] as SignerType,
+        }).catch((error) => {
+          spinner.fail('Names reference validation failed')
+          throw error
         })
 
-        const ario = ARIO.init({
-          process: new AOProcess({
-            ao,
-            processId: arioProcess,
-          }),
-        })
+        spinner.succeed('Names reference validated')
 
-        spinner.succeed('ARIO initialized')
-
-        spinner.start(`Fetching ArNS record for ${chalk.yellow(arnsName)}`)
-        const arnsNameRecord = await ario.getArNSRecord({ name: arnsName }).catch(() => {
-          spinner.fail(`ArNS name ${chalk.red(arnsName)} does not exist`)
-          this.error(`ArNS name [${arnsName}] does not exist`)
-        })
-
-        spinner.succeed(`ArNS record fetched for ${chalk.green(arnsName)}`)
-
-        const { transactionId: txOrManifestId } = await runUploadWorkflow(deployKey, deployConfig, {
+        const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
           error: (msg) => this.error(msg),
         })
+        const txOrManifestId = uploadResult.transactionId
+        const effectiveUploader = uploadResult.uploader ?? deployConfig.uploader
 
         this.log('')
 
-        spinner.start('Updating ANT record')
-        const { signer } = createSigner(deployConfig['sig-type'] as SignerType, deployKey)
-        const ant = ANT.init({ processId: arnsNameRecord.processId, signer })
+        spinner.start('Updating names reference')
+        const namesUpdate = await publishNamesUpdate({
+          deployKey,
+          gateway: deployConfig['names-gateway'],
+          graphql: deployConfig['names-graphql'],
+          name: namesTarget.name,
+          namespace: deployConfig['names-namespace'],
+          referenceId: namesTarget.referenceId,
+          sigType: deployConfig['sig-type'] as SignerType,
+          value: txOrManifestId,
+        }).catch((error) => {
+          spinner.fail('Names reference update failed')
+          throw error
+        })
 
-        await ant.setRecord(
-          {
-            transactionId: txOrManifestId,
-            ttlSeconds: Number.parseInt(deployConfig['ttl-seconds'], 10),
-            undername: deployConfig.undername,
-          },
-          {
-            tags: [
-              {
-                name: 'App-Name',
-                value: 'Permaweb-Deploy',
-              },
-              ...(process.env.GITHUB_SHA
-                ? [
-                    {
-                      name: 'GIT-HASH',
-                      value: process.env.GITHUB_SHA,
-                    },
-                  ]
-                : []),
-            ],
-          },
-        )
-
-        spinner.succeed('ANT record updated')
+        spinner.succeed('Names reference updated')
 
         const bundlerLink =
-          deployConfig['uploader-type'] === 'hyperbeam' && deployConfig.uploader
-            ? hyperbeamBundlerLink(
-                deployConfig.uploader,
-                txOrManifestId,
-                !deployConfig['deploy-file'],
-              )
+          deployConfig['uploader-type'] === 'hyperbeam' && effectiveUploader
+            ? hyperbeamBundlerLink(effectiveUploader, txOrManifestId, !deployConfig['deploy-file'])
             : undefined
 
         const rows: DisplayRow[] = [['Tx ID', chalk.green(txOrManifestId)]]
-        if (deployConfig.uploader) {
+        if (effectiveUploader) {
           rows.push(
-            ['Bundler service', chalk.cyan(deployConfig.uploader)],
+            ['Bundler service', chalk.cyan(effectiveUploader)],
             ['Uploader type', chalk.cyan(deployConfig['uploader-type'])],
           )
         }
@@ -273,11 +237,10 @@ export default class Deploy extends Command {
         }
 
         rows.push(
-          ['ArNS Name', chalk.yellow(arnsName)],
-          ['Undername', chalk.yellow(deployConfig.undername)],
-          ['ANT', chalk.cyan(arnsNameRecord.processId)],
-          ['ARIO Process', chalk.gray(arioProcess)],
-          ['TTL Seconds', chalk.blue(deployConfig['ttl-seconds'])],
+          ...(namesUpdate.name ? ([['Name', chalk.yellow(namesUpdate.name)]] as DisplayRow[]) : []),
+          ['Reference ID', chalk.cyan(namesUpdate.referenceId)],
+          ['Names Update ID', chalk.green(namesUpdate.updateId)],
+          ['Names Namespace', chalk.gray(namesUpdate.namespace)],
           ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],
         )
 

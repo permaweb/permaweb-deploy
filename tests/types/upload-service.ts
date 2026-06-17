@@ -74,7 +74,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    token: "arweave" | "ethereum" | "solana" | "ario" | "base-eth";
+                    token: "arweave" | "ethereum" | "solana";
                 };
                 cookie?: never;
             };

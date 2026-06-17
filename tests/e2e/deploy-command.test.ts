@@ -1,10 +1,100 @@
+import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
+
 import { runCommand } from '@oclif/test'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { TEST_ETH_PRIVATE_KEY } from '../constants.js'
-import { mockInsufficientBalance } from '../mocks/turbo-handlers.js'
+import { TEST_ARWEAVE_WALLET, TEST_ETH_PRIVATE_KEY } from '../constants.js'
 import { server } from '../setup.js'
+
+const DEFAULT_LEGACY_UPLOADER = 'https://up.arweave.net'
+const DEFAULT_PERMAWEBOS_BUNDLER_GATEWAY = 'https://push-9.forward.computer'
+const DEFAULT_PERMAWEBOS_BUNDLER_STAKING_PROCESS = 'Xv7dvev8_dJVwW7k_VGGdHpRqWpgSCgK4vzJmnBkg5M'
+const lapeeAddressKey = 'lapee_address'
+const require = createRequire(import.meta.url)
+const { DataItem } = require('@dha-team/arbundles') as {
+  DataItem: new (raw: Buffer) => { tags: Array<{ name: string; value: string }> }
+}
+
+function base64UrlToBuffer(value: string): Buffer {
+  const pad = '='.repeat((4 - (value.length % 4)) % 4)
+  return Buffer.from((value + pad).replaceAll('-', '+').replaceAll('_', '/'), 'base64')
+}
+
+function walletAddress(jwk: { n: string }): string {
+  return createHash('sha256').update(base64UrlToBuffer(jwk.n)).digest('base64url')
+}
+
+function dataItemTags(raw: Buffer): Record<string, string> {
+  return Object.fromEntries(new DataItem(raw).tags.map((tag) => [tag.name, tag.value]))
+}
+
+function mockHyperbeamBundler(baseUrl: string, id = 'mock-hyperbeam-dataitem-id'): void {
+  server.use(
+    http.get(`${baseUrl}/~meta@1.0/info/address`, () => HttpResponse.text('node-deposit-address')),
+    http.get(`${baseUrl}/~meta@1.0/info/ao-payment-deposit-address`, () =>
+      HttpResponse.text('node-deposit-address'),
+    ),
+    http.get(`${baseUrl}/~meta@1.0/info/ao-payment-ledger`, () => HttpResponse.text('default')),
+    http.get(`${baseUrl}/~meta@1.0/info/ao-payment-token`, () => HttpResponse.text('default')),
+    http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
+      HttpResponse.text('1'),
+    ),
+    http.get(`${baseUrl}/~arweave-byte-pricing@1.0/quote`, () => HttpResponse.text('1000')),
+    http.post(
+      `${baseUrl}/~bundler@1.0/item`,
+      () =>
+        new HttpResponse('<html><title>HyperBEAM</title></html>', {
+          headers: { id },
+          status: 200,
+        }),
+    ),
+  )
+}
+
+function mockPermawebOSBundlerState(location = 'https://hyperbeam-a.test/'): {
+  activeReads: number
+  registeredReads: number
+} {
+  const reads = { activeReads: 0, registeredReads: 0 }
+
+  server.use(
+    http.get(
+      `${DEFAULT_PERMAWEBOS_BUNDLER_GATEWAY}/${DEFAULT_PERMAWEBOS_BUNDLER_STAKING_PROCESS}/compute/:statePath`,
+      ({ params }) => {
+        if (params.statePath === 'active') {
+          reads.activeReads += 1
+          return HttpResponse.json({
+            body: {
+              owner1: {
+                [lapeeAddressKey]: 'bundler-address-1',
+                ring: 'permawebos-v0.1-gold',
+                stake: '1000',
+              },
+            },
+          })
+        }
+
+        if (params.statePath === 'registered') {
+          reads.registeredReads += 1
+          return HttpResponse.json({
+            body: {
+              'bundler-address-1': {
+                location,
+                owner: 'owner1',
+              },
+            },
+          })
+        }
+
+        return HttpResponse.text('not_found', { status: 404 })
+      },
+    ),
+  )
+
+  return reads
+}
 
 describe(
   'deploy command',
@@ -19,7 +109,7 @@ describe(
       expect(result.error).toBeUndefined()
     })
 
-    it('should deploy without requiring ArNS by default', async () => {
+    it('should deploy without requiring names publishing by default', async () => {
       const result = await runCommand([
         'deploy',
         '--deploy-file',
@@ -32,44 +122,145 @@ describe(
       expect(result.error).toBeUndefined()
     })
 
-    it('should validate on-demand token options', async () => {
-      const { error } = await runCommand([
-        'deploy',
-        '--deploy-folder',
-        './tests/fixtures/test-app',
-        '--wallet',
-        './tests/fixtures/test_wallet.json',
-        '--arns-name',
-        'test-app',
-        '--undername',
-        '@',
-        '--on-demand',
-        'invalid-token',
-        '--max-token-amount',
-        '1.0',
-      ])
+    it('should deploy and update a names reference by reference id', async () => {
+      const authority = walletAddress(TEST_ARWEAVE_WALLET)
+      let contentUploads = 0
+      let namesBundlerUploads = 0
 
-      expect(error).toBeDefined()
-      expect(error?.message).toMatch(/ario|base-eth/)
-    })
+      server.use(
+        http.post('https://arweave.net/graphql', async ({ request }) => {
+          const body = (await request.json()) as { query?: string }
 
-    it('should reject invalid ario-process', async () => {
+          if (body.query?.includes('transaction(id')) {
+            return HttpResponse.json({
+              data: {
+                transaction: {
+                  block: { height: 1 },
+                  id: 'direct-reference-id',
+                  owner: { address: authority },
+                  tags: [
+                    { name: 'device', value: 'reference@1.0' },
+                    { name: 'authority', value: authority },
+                    { name: 'reference-value', value: 'old-manifest-id' },
+                    { name: 'timestamp', value: '1' },
+                  ],
+                },
+              },
+            })
+          }
+
+          return HttpResponse.json({
+            data: {
+              transactions: {
+                edges: [],
+                pageInfo: { hasNextPage: false },
+              },
+            },
+          })
+        }),
+        http.get('https://arweave.net/tx_anchor', () =>
+          HttpResponse.text('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+        ),
+        http.get('https://arweave.net/price/1', () => HttpResponse.text('1')),
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/v1/tx/:token`, async ({ request }) => {
+          const raw = Buffer.from(await request.arrayBuffer())
+          contentUploads += 1
+          expect(raw.byteLength).toBeGreaterThan(0)
+          return HttpResponse.json({ id: `mock-legacy-upload-${contentUploads}` })
+        }),
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/tx`, async ({ request }) => {
+          namesBundlerUploads += 1
+          const raw = Buffer.from(await request.arrayBuffer())
+          const tags = Object.fromEntries(
+            new DataItem(raw).tags.map((tag) => [tag.name, tag.value]),
+          )
+          expect(raw.byteLength).toBeGreaterThan(0)
+          expect(tags.device).toBeUndefined()
+          expect(tags['reference-id']).toBe('direct-reference-id')
+          return HttpResponse.json({ id: 'mock-reference-update-id' })
+        }),
+      )
+
       const result = await runCommand([
         'deploy',
-        '--deploy-folder',
-        './tests/fixtures/test-app',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
         '--wallet',
         './tests/fixtures/test_wallet.json',
-        '--arns-name',
-        'test-app',
-        '--undername',
-        '@',
-        '--ario-process',
-        'invalid',
+        '--no-dedupe',
+        '--use-names',
+        '--reference-id',
+        'direct-reference-id',
+      ])
+
+      expect(result.error).toBeUndefined()
+      expect(contentUploads).toBe(1)
+      expect(namesBundlerUploads).toBe(1)
+    })
+
+    it('should validate names reference authority before uploading content', async () => {
+      let namesUploads = 0
+      let uploadAttempts = 0
+
+      server.use(
+        http.post('https://arweave.net/graphql', async ({ request }) => {
+          const body = (await request.json()) as { query?: string }
+
+          if (body.query?.includes('transaction(id')) {
+            return HttpResponse.json({
+              data: {
+                transaction: {
+                  block: { height: 1 },
+                  id: 'direct-reference-id',
+                  owner: { address: 'OTHER' },
+                  tags: [
+                    { name: 'device', value: 'reference@1.0' },
+                    { name: 'authority', value: 'OTHER' },
+                    { name: 'reference-value', value: 'old-manifest-id' },
+                    { name: 'timestamp', value: '1' },
+                  ],
+                },
+              },
+            })
+          }
+
+          return HttpResponse.json({
+            data: {
+              transactions: {
+                edges: [],
+                pageInfo: { hasNextPage: false },
+              },
+            },
+          })
+        }),
+        http.post('https://upload.ardrive.io/v1/tx/arweave', async () => {
+          uploadAttempts += 1
+          return HttpResponse.json({ id: 'unexpected-upload-id' })
+        }),
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/tx`, async () => {
+          namesUploads += 1
+          return HttpResponse.json({}, { status: 200 })
+        }),
+      )
+
+      const result = await runCommand([
+        'deploy',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--no-dedupe',
+        '--use-names',
+        '--reference-id',
+        'direct-reference-id',
       ])
 
       expect(result.error).toBeDefined()
-      expect(result.error?.message).toMatch(/valid Arweave transaction ID/)
+      expect(result.error?.message).toContain(
+        'signer is not reference authority for direct-reference-id',
+      )
+      expect(uploadAttempts).toBe(0)
+      expect(namesUploads).toBe(0)
     })
 
     it('should reject invalid dedupe-cache-max-entries', async () => {
@@ -79,10 +270,6 @@ describe(
         './tests/fixtures/test-app',
         '--wallet',
         './tests/fixtures/test_wallet.json',
-        '--arns-name',
-        'test-app',
-        '--undername',
-        '@',
         '--dedupe-cache-max-entries',
         '-1',
       ])
@@ -98,10 +285,6 @@ describe(
         './tests/fixtures/test-app',
         '--wallet',
         './tests/fixtures/test_wallet.json',
-        '--arns-name',
-        'test-app',
-        '--undername',
-        '@',
         '--dedupe-cache-max-entries',
         '50',
       ])
@@ -116,10 +299,6 @@ describe(
         './tests/fixtures/test-app',
         '--wallet',
         './tests/fixtures/test_wallet.json',
-        '--arns-name',
-        'test-app',
-        '--undername',
-        '@',
         '--no-dedupe',
       ])
 
@@ -133,10 +312,6 @@ describe(
         './tests/fixtures/test-app',
         '--wallet',
         './tests/fixtures/test_wallet.json',
-        '--arns-name',
-        'test-app',
-        '--undername',
-        '@',
         '--dedupe-cache-max-entries',
         '0',
       ])
@@ -144,22 +319,87 @@ describe(
       expect(result.error).toBeUndefined()
     })
 
+    it('should keep the manifest device tag for legacy folder uploads', async () => {
+      const seenTags: Array<Record<string, string>> = []
+
+      server.use(
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/v1/tx/:token`, async ({ request }) => {
+          const raw = Buffer.from(await request.arrayBuffer())
+          seenTags.push(dataItemTags(raw))
+
+          return HttpResponse.json({ id: `mock-legacy-dataitem-id-${seenTags.length}` })
+        }),
+      )
+
+      const result = await runCommand([
+        'deploy',
+        '--deploy-folder',
+        './tests/fixtures/test-app',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--no-dedupe',
+      ])
+
+      expect(result.error).toBeUndefined()
+
+      const manifestTags = seenTags.find(
+        (tags) => tags['Content-Type'] === 'application/x.arweave-manifest+json',
+      )
+      expect(manifestTags).toBeDefined()
+      expect(manifestTags?.Device).toBe('manifest@1.0')
+    })
+
     describe('hyperbeam uploader', () => {
       beforeEach(() => {
+        mockHyperbeamBundler('https://hyperbeam.test')
+      })
+
+      it('should list active HyperBEAM uploaders from the dedicated command as JSON', async () => {
+        const reads = mockPermawebOSBundlerState()
+
+        const result = await runCommand(['hyperbeam-uploaders', '--json'])
+
+        expect(result.error).toBeUndefined()
+        expect(reads.activeReads).toBe(1)
+        expect(reads.registeredReads).toBe(1)
+      })
+
+      it('should auto-select an active HyperBEAM uploader when no uploader URL is passed', async () => {
+        const reads = mockPermawebOSBundlerState('https://hyperbeam.test/')
+        const seenUploads: Array<{ contentType: string; size: number }> = []
+
         server.use(
-          http.get('https://hyperbeam.test/~meta@1.0/info/address', () =>
-            HttpResponse.text('node-deposit-address'),
-          ),
-          http.get('https://hyperbeam.test/~meta@1.0/info/ao-payment-deposit-address', () =>
-            HttpResponse.text('node-deposit-address'),
-          ),
-          http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
-            HttpResponse.text('1'),
-          ),
-          http.get('https://hyperbeam.test/~arweave-byte-pricing@1.0/quote', () =>
-            HttpResponse.text('1000'),
-          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', async ({ request }) => {
+            const raw = Buffer.from(await request.arrayBuffer())
+            seenUploads.push({
+              contentType: request.headers.get('content-type') || '',
+              size: raw.length,
+            })
+
+            return new HttpResponse('<html><title>HyperBEAM</title></html>', {
+              headers: { id: 'mock-auto-selected-hyperbeam-dataitem-id' },
+              status: 200,
+            })
+          }),
         )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeUndefined()
+        expect(reads.activeReads).toBe(1)
+        expect(reads.registeredReads).toBe(1)
+        expect(seenUploads).toHaveLength(1)
+        expect(seenUploads[0].contentType).toBe('application/octet-stream')
+        expect(seenUploads[0].size).toBeGreaterThan(0)
       })
 
       it('should upload a file through a HyperBEAM bundler route', async () => {
@@ -199,19 +439,65 @@ describe(
         expect(seenUploads[0].size).toBeGreaterThan(0)
       })
 
-      it('should require an uploader URL for HyperBEAM uploads', async () => {
-        const { error } = await runCommand([
+      it('should upload HyperBEAM folder manifests as plain Arweave manifests', async () => {
+        const seenTags: Array<Record<string, string>> = []
+
+        server.use(
+          http.post('https://hyperbeam.test/~bundler@1.0/item', async ({ request }) => {
+            const raw = Buffer.from(await request.arrayBuffer())
+            seenTags.push(dataItemTags(raw))
+
+            return new HttpResponse('<html><title>HyperBEAM</title></html>', {
+              headers: { id: `mock-hyperbeam-dataitem-id-${seenTags.length}` },
+              status: 200,
+            })
+          }),
+        )
+
+        const result = await runCommand([
+          'deploy',
+          '--deploy-folder',
+          './tests/fixtures/test-app',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeUndefined()
+        expect(seenTags).toHaveLength(3)
+
+        const manifestTags = seenTags.find(
+          (tags) => tags['Content-Type'] === 'application/x.arweave-manifest+json',
+        )
+        expect(manifestTags).toBeDefined()
+        expect(manifestTags?.Device).toBeUndefined()
+      })
+
+      it('should use the legacy up.arweave.net uploader by default', async () => {
+        let uploadAttempted = false
+
+        server.use(
+          http.post(`${DEFAULT_LEGACY_UPLOADER}/v1/tx/:token`, () => {
+            uploadAttempted = true
+            return HttpResponse.json({ id: 'mock-default-legacy-dataitem-id' })
+          }),
+        )
+
+        const result = await runCommand([
           'upload',
           '--deploy-file',
           './tests/fixtures/test-app/index.html',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--uploader-type',
-          'hyperbeam',
+          '--no-dedupe',
         ])
 
-        expect(error).toBeDefined()
-        expect(error?.message).toMatch(/require --uploader/)
+        expect(result.error).toBeUndefined()
+        expect(uploadAttempted).toBe(true)
       })
 
       it('should include AO funding metadata when a HyperBEAM upload needs payment', async () => {
@@ -239,7 +525,78 @@ describe(
         expect(result.error?.message).toContain('default')
       })
 
-      it('should reject HyperBEAM uploads when the bundler wallet has no AR', async () => {
+      it('should fall back to direct upload when auto-fund is unavailable', async () => {
+        let uploadAttempted = false
+
+        server.use(
+          http.get('https://hyperbeam.test/~arweave-byte-pricing@1.0/quote', () =>
+            HttpResponse.text('quote route unavailable', { status: 500 }),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () => {
+            uploadAttempted = true
+
+            return new HttpResponse('<html><title>HyperBEAM</title></html>', {
+              headers: { id: 'mock-direct-fallback-id' },
+              status: 200,
+            })
+          }),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeUndefined()
+        expect(uploadAttempted).toBe(true)
+      })
+
+      it('should require AR balance before direct fallback when auto-fund is unavailable', async () => {
+        let uploadAttempted = false
+
+        server.use(
+          http.get('https://hyperbeam.test/~arweave-byte-pricing@1.0/quote', () =>
+            HttpResponse.text('quote route unavailable', { status: 500 }),
+          ),
+          http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
+            HttpResponse.text('0'),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () => {
+            uploadAttempted = true
+            return HttpResponse.text('should not upload', { status: 200 })
+          }),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('has 0 AR')
+        expect(result.error?.message).toContain('cannot seed data to Arweave')
+        expect(uploadAttempted).toBe(false)
+      })
+
+      it('should require AR balance before auto-funding a HyperBEAM upload', async () => {
         let uploadAttempted = false
 
         server.use(
@@ -262,10 +619,109 @@ describe(
           'hyperbeam',
           '--uploader',
           'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
           '--no-dedupe',
         ])
 
         expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('has 0 AR')
+        expect(result.error?.message).toContain('cannot seed data to Arweave')
+        expect(uploadAttempted).toBe(false)
+      })
+
+      it('should explain auto-fund compatibility failures when direct fallback still needs payment', async () => {
+        server.use(
+          http.get('https://hyperbeam.test/~arweave-byte-pricing@1.0/quote', () =>
+            HttpResponse.text('quote route unavailable', { status: 500 }),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () =>
+            HttpResponse.text('insufficient local ledger balance', { status: 402 }),
+          ),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('not hyperbalance-compatible')
+        expect(result.error?.message).toContain('Attempted direct upload instead')
+        expect(result.error?.message).not.toContain('Use --hyperbeam-auto-fund')
+      })
+
+      it('should reject explicit HyperBEAM uploads when the bundler wallet has no AR', async () => {
+        let uploadAttempted = false
+
+        server.use(
+          http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
+            HttpResponse.text('0'),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () => {
+            uploadAttempted = true
+
+            return new HttpResponse('<html><title>HyperBEAM</title></html>', {
+              headers: { id: 'mock-explicit-hyperbeam-dataitem-id' },
+              status: 200,
+            })
+          }),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('has 0 AR')
+        expect(result.error?.message).toContain('cannot seed data to Arweave')
+        expect(uploadAttempted).toBe(false)
+      })
+
+      it('should reject auto-selected HyperBEAM uploads when the bundler wallet has no AR', async () => {
+        let uploadAttempted = false
+        mockPermawebOSBundlerState('https://hyperbeam.test/')
+
+        server.use(
+          http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
+            HttpResponse.text('0'),
+          ),
+          http.post('https://hyperbeam.test/~bundler@1.0/item', () => {
+            uploadAttempted = true
+            return HttpResponse.text('should not upload', { status: 200 })
+          }),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeDefined()
+        expect(result.error?.message).toContain('No active HyperBEAM uploaders with spendable AR')
         expect(result.error?.message).toContain('has 0 AR')
         expect(result.error?.message).toContain('cannot seed data to Arweave')
         expect(uploadAttempted).toBe(false)
@@ -281,50 +737,6 @@ describe(
             './tests/fixtures/test-app',
             '--wallet',
             './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-          ])
-
-          expect(result.error).toBeUndefined()
-        })
-
-        it('should deploy with ario on-demand', async () => {
-          const result = await runCommand([
-            'deploy',
-            '--deploy-folder',
-            './tests/fixtures/test-app',
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-            '--on-demand',
-            'ario',
-            '--max-token-amount',
-            '1.5',
-          ])
-
-          expect(result.error).toBeUndefined()
-        })
-
-        it('should deploy with base-eth on-demand', async () => {
-          const result = await runCommand([
-            'deploy',
-            '--deploy-folder',
-            './tests/fixtures/test-app',
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-            '--on-demand',
-            'base-eth',
-            '--max-token-amount',
-            '2.0',
           ])
 
           expect(result.error).toBeUndefined()
@@ -339,50 +751,6 @@ describe(
             './tests/fixtures/test-app/index.html',
             '--wallet',
             './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-          ])
-
-          expect(result.error).toBeUndefined()
-        })
-
-        it('should deploy with ario on-demand', async () => {
-          const result = await runCommand([
-            'deploy',
-            '--deploy-file',
-            './tests/fixtures/test-app/index.html',
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-            '--on-demand',
-            'ario',
-            '--max-token-amount',
-            '1.0',
-          ])
-
-          expect(result.error).toBeUndefined()
-        })
-
-        it('should deploy with base-eth on-demand', async () => {
-          const result = await runCommand([
-            'deploy',
-            '--deploy-file',
-            './tests/fixtures/test-app/index.html',
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-            '--on-demand',
-            'base-eth',
-            '--max-token-amount',
-            '0.3',
           ])
 
           expect(result.error).toBeUndefined()
@@ -401,32 +769,8 @@ describe(
             'ethereum',
             '--private-key',
             TEST_ETH_PRIVATE_KEY,
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-          ])
-
-          expect(result.error).toBeUndefined()
-        })
-
-        it('should deploy with base-eth on-demand', async () => {
-          const result = await runCommand([
-            'deploy',
-            '--deploy-folder',
-            './tests/fixtures/test-app',
-            '--sig-type',
-            'ethereum',
-            '--private-key',
-            TEST_ETH_PRIVATE_KEY,
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-            '--on-demand',
-            'base-eth',
-            '--max-token-amount',
-            '0.5',
+            '--uploader-type',
+            'legacy',
           ])
 
           expect(result.error).toBeUndefined()
@@ -443,32 +787,8 @@ describe(
             'ethereum',
             '--private-key',
             TEST_ETH_PRIVATE_KEY,
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-          ])
-
-          expect(result.error).toBeUndefined()
-        })
-
-        it('should deploy with base-eth on-demand', async () => {
-          const result = await runCommand([
-            'deploy',
-            '--deploy-file',
-            './tests/fixtures/test-app/index.html',
-            '--sig-type',
-            'ethereum',
-            '--private-key',
-            TEST_ETH_PRIVATE_KEY,
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-            '--on-demand',
-            'base-eth',
-            '--max-token-amount',
-            '0.4',
+            '--uploader-type',
+            'legacy',
           ])
 
           expect(result.error).toBeUndefined()
@@ -494,10 +814,6 @@ describe(
           './tests/fixtures/test-app/index.html',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--arns-name',
-          'test-app',
-          '--undername',
-          '@',
           '--dedupe-cache-max-entries',
           '10',
         ])
@@ -519,10 +835,6 @@ describe(
           './tests/fixtures/test-app/index.html',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--arns-name',
-          'test-app',
-          '--undername',
-          '@',
           '--dedupe-cache-max-entries',
           '10',
         ])
@@ -556,10 +868,6 @@ describe(
           './tests/fixtures/test-app',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--arns-name',
-          'test-app',
-          '--undername',
-          '@',
           '--dedupe-cache-max-entries',
           '10',
         ])
@@ -582,10 +890,6 @@ describe(
           './tests/fixtures/test-app',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--arns-name',
-          'test-app',
-          '--undername',
-          '@',
           '--dedupe-cache-max-entries',
           '10',
         ])
@@ -619,10 +923,6 @@ describe(
           './tests/fixtures/test-app/index.html',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--arns-name',
-          'test-app',
-          '--undername',
-          '@',
           '--no-dedupe',
         ])
 
@@ -655,10 +955,6 @@ describe(
           './tests/fixtures/test-app',
           '--wallet',
           './tests/fixtures/test_wallet.json',
-          '--arns-name',
-          'test-app',
-          '--undername',
-          '@',
           '--dedupe-cache-max-entries',
           '0',
         ])
@@ -672,87 +968,6 @@ describe(
         // Clean up
         if (fs.existsSync(cacheDir)) {
           fs.rmSync(cacheDir, { force: true, recursive: true })
-        }
-      })
-    })
-
-    describe('insufficient balance', () => {
-      it('should fail deployment when wallet has insufficient Turbo credits', async () => {
-        // Mock insufficient balance: balance = 100 winc, cost = 1000000 winc
-        server.use(...mockInsufficientBalance('100', '1000000'))
-
-        // Create a large test file (> 105 KiB threshold)
-        const fs = await import('node:fs')
-        const path = await import('node:path')
-        const largeFilePath = path.join(process.cwd(), 'tests/fixtures/large-test-file.bin')
-        const largeFileSize = 200_000 // 200 KB - above the 105 KiB threshold
-        const largeFileBuffer = Buffer.alloc(largeFileSize, 'a')
-        fs.writeFileSync(largeFilePath, largeFileBuffer)
-
-        try {
-          const { error } = await runCommand([
-            'deploy',
-            '--deploy-file',
-            largeFilePath,
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-          ])
-
-          expect(error).toBeDefined()
-          expect(error?.message).toMatch(/Insufficient Turbo credits/)
-          expect(error?.message).toMatch(/Required.*winc.*available.*winc/)
-        } finally {
-          // Clean up test file
-          if (fs.existsSync(largeFilePath)) {
-            fs.unlinkSync(largeFilePath)
-          }
-        }
-      })
-
-      it('should fail deployment when folder upload exceeds balance', async () => {
-        // Mock insufficient balance: balance = 50000 winc, cost = 200000 winc
-        server.use(...mockInsufficientBalance('50000', '200000'))
-
-        // Create a large test folder (> 105 KiB threshold)
-        const fs = await import('node:fs')
-        const path = await import('node:path')
-        const largeFolderPath = path.join(process.cwd(), 'tests/fixtures/large-test-folder')
-        const largeFileSize = 150_000 // 150 KB - above the 105 KiB threshold
-        const largeFileBuffer = Buffer.alloc(largeFileSize, 'b')
-
-        // Create folder and file
-        if (!fs.existsSync(largeFolderPath)) {
-          fs.mkdirSync(largeFolderPath, { recursive: true })
-        }
-
-        const largeFilePath = path.join(largeFolderPath, 'large-file.bin')
-        fs.writeFileSync(largeFilePath, largeFileBuffer)
-
-        try {
-          const { error } = await runCommand([
-            'deploy',
-            '--deploy-folder',
-            largeFolderPath,
-            '--wallet',
-            './tests/fixtures/test_wallet.json',
-            '--arns-name',
-            'test-app',
-            '--undername',
-            '@',
-          ])
-
-          expect(error).toBeDefined()
-          expect(error?.message).toMatch(/Insufficient Turbo credits/)
-          expect(error?.message).toMatch(/Required.*winc.*available.*winc/)
-        } finally {
-          // Clean up test folder
-          if (fs.existsSync(largeFolderPath)) {
-            fs.rmSync(largeFolderPath, { force: true, recursive: true })
-          }
         }
       })
     })

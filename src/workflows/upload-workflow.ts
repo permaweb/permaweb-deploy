@@ -1,13 +1,5 @@
-import fs from 'node:fs'
-import path from 'node:path'
+import { randomInt } from 'node:crypto'
 
-import {
-  ARIOToTokenAmount,
-  ETHToTokenAmount,
-  OnDemandFunding,
-  TurboAuthenticatedConfiguration,
-  TurboFactory,
-} from '@ardrive/turbo-sdk'
 import ora from 'ora'
 
 import type { SignerType } from '../types/index.js'
@@ -17,12 +9,17 @@ import {
   type HyperbeamBundlerAutoFundOptions,
   HyperbeamBundlerClient,
   parseHyperbeamFundAmount,
+  preflightHyperbeamBundlerArBalance,
   type UploadClient,
   type UploadCost,
   type UploadSize,
 } from '../utils/hyperbeam-uploader.js'
+import { LegacyBundlerClient } from '../utils/legacy-bundler-uploader.js'
 import { expandPath } from '../utils/path.js'
-import { createSigner } from '../utils/signer.js'
+import {
+  type ActivePermawebOSBundler,
+  fetchActivePermawebOSBundlers,
+} from '../utils/permawebos-bundlers.js'
 import { type FolderUploadResult, uploadFile, uploadFolder } from '../utils/uploader.js'
 
 export interface UploadWorkflowConfig {
@@ -35,24 +32,9 @@ export interface UploadWorkflowConfig {
   'hyperbeam-ledger-id'?: string
   'hyperbeam-token-id'?: string
   'hyperbeam-upload-path'?: string
-  'max-token-amount'?: string
-  'on-demand'?: string
   'sig-type': string
   uploader?: string
   'uploader-type'?: string
-}
-
-function getFolderSize(folderPath: string): number {
-  let totalSize = 0
-
-  for (const item of fs.readdirSync(folderPath)) {
-    const fullPath = path.join(folderPath, item)
-    const stats = fs.statSync(fullPath)
-
-    totalSize += stats.isDirectory() ? getFolderSize(fullPath) : stats.size
-  }
-
-  return totalSize
 }
 
 export interface UploadWorkflowIo {
@@ -63,13 +45,60 @@ export interface UploadWorkflowResult {
   cost?: UploadCost
   size?: UploadSize
   transactionId: string
+  uploader?: string
+}
+
+function randomizedUploaders(uploaders: ActivePermawebOSBundler[]): ActivePermawebOSBundler[] {
+  const candidates = [...uploaders]
+
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1)
+    const current = candidates[index]
+    const replacement = candidates[swapIndex]
+    candidates[index] = replacement
+    candidates[swapIndex] = current
+  }
+
+  return candidates
+}
+
+async function discoverUsableHyperbeamUploader(spinner: ReturnType<typeof ora>): Promise<string> {
+  spinner.start('Discovering active HyperBEAM uploaders')
+  const uploaders = randomizedUploaders(await fetchActivePermawebOSBundlers())
+
+  if (uploaders.length === 0) {
+    spinner.fail('No active HyperBEAM uploaders found')
+    throw new Error('No active HyperBEAM uploaders found')
+  }
+
+  const failures: string[] = []
+  for (const uploader of uploaders) {
+    try {
+      await preflightHyperbeamBundlerArBalance(uploader.url)
+      spinner.succeed(`Selected HyperBEAM bundler (${chalk.cyan(uploader.url)})`)
+      return uploader.url
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      failures.push(`${uploader.url}: ${message}`)
+    }
+  }
+
+  spinner.fail('No active HyperBEAM uploaders with spendable AR found')
+  throw new Error(
+    [
+      'No active HyperBEAM uploaders with spendable AR found.',
+      failures.length > 0 ? failures.join('\n') : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  )
 }
 
 /**
- * Sign in to Turbo and upload a file or folder.
+ * Sign and upload a file or folder.
  *
  * @param deployKey - Wallet material (base64 JWK or hex private key per sig-type)
- * @param config - Upload paths, dedupe, bundler service URL, on-demand payment
+ * @param config - Upload paths, dedupe, and bundler service URL.
  * @param io - Error handler (must exit the process)
  * @returns Transaction ID or folder manifest ID
  */
@@ -80,28 +109,22 @@ export async function runUploadWorkflow(
 ): Promise<UploadWorkflowResult> {
   const spinner = ora()
 
-  const uploaderType = config['uploader-type'] ?? 'turbo'
+  const uploaderType = config['uploader-type'] ?? 'legacy'
   let uploadClient: UploadClient
-  let turbo: ReturnType<typeof TurboFactory.authenticated> | undefined
+  let effectiveUploader: string | undefined
 
   if (uploaderType === 'hyperbeam') {
     if (config['sig-type'] !== 'arweave') {
       io.error('HyperBEAM uploads require --sig-type arweave')
     }
 
-    if (!config.uploader) {
-      io.error('HyperBEAM uploads require --uploader <node-url>')
-    }
-
-    if (config['on-demand']) {
-      io.error('HyperBEAM uploads do not support Turbo --on-demand payments')
-    }
+    effectiveUploader = config.uploader ?? (await discoverUsableHyperbeamUploader(spinner))
 
     let autoFund: HyperbeamBundlerAutoFundOptions | undefined
     if (config['hyperbeam-auto-fund']) {
       autoFund = {
         deployKey,
-        uploader: config.uploader,
+        uploader: effectiveUploader,
       }
       if (config['hyperbeam-ao-state-url']) autoFund.aoStateUrl = config['hyperbeam-ao-state-url']
       if (config['hyperbeam-ledger-id']) autoFund.ledgerId = config['hyperbeam-ledger-id']
@@ -118,103 +141,22 @@ export async function runUploadWorkflow(
       quote: {
         ledgerId: config['hyperbeam-ledger-id'],
         tokenId: config['hyperbeam-token-id'],
-        uploader: config.uploader,
+        uploader: effectiveUploader,
       },
       uploadPath: config['hyperbeam-upload-path'] ?? '/~bundler@1.0/item?codec-device=ans104@1.0',
-      uploader: config.uploader,
+      uploader: effectiveUploader,
     })
-    spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(config.uploader)})`)
+    spinner.succeed(`HyperBEAM bundler initialized (${chalk.cyan(effectiveUploader)})`)
   } else {
-    spinner.start('Creating signer')
-    const { signer, token } = createSigner(config['sig-type'] as SignerType, deployKey)
-    spinner.succeed(`Signer created (${chalk.cyan(config['sig-type'])})`)
-
-    spinner.start('Initializing Turbo')
-
-    const turboFactoryArgs: TurboAuthenticatedConfiguration = { signer, token }
-
-    if (config.uploader) {
-      turboFactoryArgs.uploadServiceConfig = { url: config.uploader }
-    }
-
-    turbo = TurboFactory.authenticated(turboFactoryArgs)
-    uploadClient = turbo as UploadClient
-
-    spinner.succeed('Turbo initialized')
-  }
-
-  let fundingMode: OnDemandFunding | undefined
-  if (config['on-demand'] && config['max-token-amount']) {
-    const tokenType = config['on-demand']
-    const maxAmount = Number.parseFloat(config['max-token-amount'])
-
-    let maxTokenAmount: ReturnType<typeof ARIOToTokenAmount>
-    switch (tokenType) {
-      case 'ario': {
-        maxTokenAmount = ARIOToTokenAmount(maxAmount)
-        break
-      }
-
-      case 'base-eth': {
-        maxTokenAmount = ETHToTokenAmount(maxAmount)
-        break
-      }
-
-      default: {
-        throw new Error(`Unsupported on-demand token type: ${tokenType}`)
-      }
-    }
-
-    fundingMode = new OnDemandFunding({
-      maxTokenAmount,
-      topUpBufferMultiplier: 1.1,
+    effectiveUploader = config.uploader ?? 'https://up.arweave.net'
+    spinner.start('Initializing legacy bundler')
+    uploadClient = new LegacyBundlerClient({
+      deployKey,
+      sigType: config['sig-type'] as SignerType,
+      uploader: effectiveUploader,
     })
-  }
 
-  if (!fundingMode && turbo) {
-    spinner.start('Checking Turbo credits for upload')
-
-    try {
-      const uploadBytes = config['deploy-file']
-        ? (() => {
-            const filePath = expandPath(config['deploy-file']!)
-            return fs.statSync(filePath).size
-          })()
-        : (() => {
-            const folderPath = expandPath(config['deploy-folder']!)
-            return getFolderSize(folderPath)
-          })()
-
-      const FREE_THRESHOLD_BYTES = 107_520 // ~105 KiB
-
-      if (uploadBytes >= FREE_THRESHOLD_BYTES) {
-        const [uploadCost] = await turbo.getUploadCosts({ bytes: [uploadBytes] })
-        const balance = await turbo.getBalance()
-
-        const requiredWinc = BigInt(uploadCost.winc)
-        const currentWinc = BigInt(balance.winc)
-
-        if (requiredWinc > currentWinc) {
-          spinner.fail('Insufficient Turbo credits')
-
-          io.error(
-            [
-              'Insufficient Turbo credits for this upload.',
-              `Required: ${requiredWinc.toString()} winc, available: ${currentWinc.toString()} winc.`,
-              '',
-              'Top up your Turbo balance (or re-run with --on-demand and --max-token-amount).',
-            ].join(' '),
-          )
-        }
-      }
-
-      spinner.succeed('Turbo credits check passed')
-    } catch (balanceError) {
-      spinner.fail('Failed to check Turbo credits')
-      const errorMessage =
-        balanceError instanceof Error ? balanceError.message : String(balanceError)
-      io.error(`Failed to check Turbo credits: ${errorMessage}`)
-    }
+    spinner.succeed('Legacy bundler initialized')
   }
 
   let txOrManifestId: string
@@ -226,7 +168,7 @@ export async function runUploadWorkflow(
       spinner.start(`Uploading file ${chalk.yellow(config['deploy-file'])}`)
 
       let cache = config['dedupe-cache-max-entries'] > 0 ? loadCache() : {}
-      const uploadResult = await uploadFile(uploadClient, filePath, { cache, fundingMode })
+      const uploadResult = await uploadFile(uploadClient, filePath, { cache })
 
       if (!uploadResult.transactionId) {
         spinner.fail('File upload failed: no transaction ID returned')
@@ -257,7 +199,7 @@ export async function runUploadWorkflow(
       const uploadResult: FolderUploadResult = await uploadFolder(uploadClient, folderPath, {
         cache,
         concurrency: config['hyperbeam-auto-fund'] ? 1 : undefined,
-        fundingMode,
+        omitManifestDeviceTag: uploaderType === 'hyperbeam',
         throwOnFailure: true,
       })
 
@@ -301,5 +243,6 @@ export async function runUploadWorkflow(
     cost,
     size,
     transactionId: txOrManifestId,
+    uploader: effectiveUploader,
   }
 }

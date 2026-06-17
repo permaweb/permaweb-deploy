@@ -131,9 +131,7 @@ paths:
           schema:
             type: string
             enum:
-              - ario
               - solana
-              - base-eth
               - arweave
               - ethereum
         - name: amount
@@ -162,9 +160,7 @@ paths:
             type: string
             enum:
               - arweave
-              - ario
               - solana
-              - base-eth
       requestBody:
         required: true
         content:

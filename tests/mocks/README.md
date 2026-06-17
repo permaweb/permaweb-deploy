@@ -1,12 +1,12 @@
-# Turbo API Test Mocks
+# Legacy Upload API Test Mocks
 
-This directory contains Mock Service Worker (MSW) handlers for testing Turbo Upload and Payment Services.
+This directory contains Mock Service Worker (MSW) handlers for testing legacy upload endpoints.
 
 ## Overview
 
 MSW intercepts HTTP requests at the network level, allowing you to test your code with realistic API responses without hitting actual endpoints.
 
-All mock handlers are **fully typed** using TypeScript types generated from the official Turbo OpenAPI specifications.
+Upload mock handlers are typed from the legacy upload OpenAPI fixtures.
 
 ## Type Generation
 
@@ -27,15 +27,19 @@ The MSW server is automatically configured for all tests via `tests/setup.ts`. J
 
 ```typescript
 import { describe, expect, it } from 'vitest'
-import { TurboFactory } from '@ardrive/turbo-sdk'
+import { http, HttpResponse } from 'msw'
+
+import { server } from '../setup.js'
 
 describe('My Upload Test', () => {
   it('should upload successfully', async () => {
-    // MSW automatically intercepts and mocks Turbo API calls
-    const turbo = TurboFactory.authenticated({ signer, token: 'arweave' })
-    const result = await turbo.uploadFile({ file: './test.txt' })
+    server.use(
+      http.post('https://up.arweave.net/v1/tx/arweave', () =>
+        HttpResponse.json({ id: 'mock-tx-id-123' }),
+      ),
+    )
 
-    expect(result.id).toBe('mock-tx-id-123')
+    // Your test code
   })
 })
 ```
@@ -53,7 +57,6 @@ All default handlers are automatically loaded:
 
 - **Payment Service**
   - `GET /v1/balance` - Get wallet balance
-  - `POST /v1/top-up` - Top up with tokens
   - `GET /v1/rates/:currency/:amount` - Get fiat rates
 
 ### Custom Handlers
@@ -62,7 +65,7 @@ Override default behavior for specific tests:
 
 ```typescript
 import { server } from '../setup.js'
-import { mockUploadSuccess, mockUploadFailure } from '../mocks/turbo-handlers.js'
+import { mockUploadSuccess, mockUploadFailure } from '../mocks/legacy-handlers.js'
 
 it('should handle custom tx id', () => {
   server.use(mockUploadSuccess('my-custom-tx-id'))
@@ -82,37 +85,15 @@ it('should handle upload errors', () => {
 - `mockUploadSuccess(txId)` - Mock successful upload with custom TX ID
 - `mockUploadFailure(status, message)` - Mock upload failure
 
-### Payment Helpers
-
-- `mockInsufficientBalance(winc)` - Mock low balance scenario
-- `mockOnDemandFundingSuccess(winc)` - Mock successful on-demand top-up
-
-### Example: Testing On-Demand Funding
-
-```typescript
-import { mockInsufficientBalance, mockOnDemandFundingSuccess } from '../mocks/turbo-handlers.js'
-import { server } from '../setup.js'
-
-it('should top up when balance is low', async () => {
-  // Setup: wallet has low balance
-  server.use(mockInsufficientBalance('100'), mockOnDemandFundingSuccess('1000000000000'))
-
-  // Your upload code that triggers on-demand funding
-  const result = await uploadWithOnDemandFunding()
-
-  expect(result.success).toBe(true)
-})
-```
-
 ## Mock Data
 
 Access mock data generators for custom responses:
 
 ```typescript
-import { mockTurboData } from '../mocks/turbo-handlers.js'
+import { mockLegacyData } from '../mocks/legacy-handlers.js'
 
-const customUpload = mockTurboData.uploadResponse('my-id')
-const customBalance = mockTurboData.balanceResponse('5000000000')
+const customUpload = mockLegacyData.uploadResponse('my-id')
+const customBalance = mockLegacyData.balanceResponse('5000000000')
 ```
 
 ## Best Practices

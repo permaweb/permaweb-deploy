@@ -100,6 +100,11 @@ export interface HyperbeamBundlerQuoteOptions {
   uploader: string
 }
 
+export interface HyperbeamDataItemPostResult {
+  body: string
+  id?: string
+}
+
 async function readableToBuffer(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = []
 
@@ -142,6 +147,10 @@ function normalizeUploadUrl(base: string, uploadPath: string): string {
   const normalizedBase = base.endsWith('/') ? base : `${base}/`
   const cleanPath = uploadPath.startsWith('/') ? uploadPath.slice(1) : uploadPath
   return new URL(cleanPath, normalizedBase).toString()
+}
+
+export function hyperbeamUploadUrl(base: string, uploadPath: string): string {
+  return normalizeUploadUrl(base, uploadPath)
 }
 
 function arweaveAddressFromJwk(jwk: Record<string, unknown>): string {
@@ -301,7 +310,7 @@ export function hyperbeamBundlerLink(uploader: string, id: string, isManifest = 
   return new URL(`${encodeURIComponent(id)}${isManifest ? '/' : ''}`, normalizedBase).toString()
 }
 
-async function preflightHyperbeamBundlerArBalance(uploader: string): Promise<void> {
+export async function preflightHyperbeamBundlerArBalance(uploader: string): Promise<void> {
   const nodeUrl = uploader.replace(/\/+$/, '')
   const addressRes = await fetch(`${nodeUrl}/~meta@1.0/info/address`)
   if (!addressRes.ok) {
@@ -344,6 +353,32 @@ function responseId(headers: Headers, body: string): string | undefined {
   }
 }
 
+export async function postHyperbeamDataItem(
+  uploadUrl: string,
+  raw: Buffer | Uint8Array,
+  localId?: string,
+): Promise<HyperbeamDataItemPostResult> {
+  const res = await fetch(uploadUrl, {
+    body: raw,
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/octet-stream',
+    },
+    method: 'POST',
+  })
+  const body = await res.text()
+
+  if (!res.ok) {
+    const preview = responsePreview(body)
+    const itemContext = localId ? ` for local data item ${localId}` : ''
+    throw new Error(
+      `HyperBEAM bundler upload failed${itemContext} with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+    )
+  }
+
+  return { body, id: responseId(res.headers, body) }
+}
+
 function cleanAutoFundErrorMessage(message: string): string {
   const jsonStart = message.indexOf('{')
   if (jsonStart >= 0) {
@@ -368,6 +403,14 @@ function autoFundFailureNote(message: string): string {
   return 'Check the wallet or node ledger before retrying auto-fund; the AO transfer may already have been submitted.'
 }
 
+function autoFundUnavailableMessage(message: string): string {
+  return [
+    'HyperBEAM auto-fund was requested, but this node is not hyperbalance-compatible for this upload.',
+    `Auto-fund compatibility check failed: ${message}`,
+    'Attempted direct upload instead.',
+  ].join('\n')
+}
+
 export class HyperbeamBundlerClient implements UploadClient {
   private readonly autoFund?: HyperbeamBundlerAutoFundOptions
   private readonly quote: HyperbeamBundlerQuoteOptions
@@ -389,9 +432,6 @@ export class HyperbeamBundlerClient implements UploadClient {
   }
 
   async uploadFile(args: UploadFileArgs): Promise<{ id: string } & UploadClientResult> {
-    this.seedPreflight ??= preflightHyperbeamBundlerArBalance(this.uploader)
-    await this.seedPreflight
-
     const data = args.file
       ? typeof args.file === 'string'
         ? fs.readFileSync(args.file)
@@ -405,32 +445,17 @@ export class HyperbeamBundlerClient implements UploadClient {
     const raw = Buffer.from(item.getRaw())
     const localId = item.id || toBase64Url(new DataItem(raw).id)
     const size: UploadSize = { payloadBytes: data.length, signedBytes: raw.length }
+    let autoFundUnavailable: string | undefined
+    let autoFundQuote: { amount: bigint; ledgerId?: string; tokenId?: string } | undefined
     let cost: UploadCost | undefined
 
     if (this.autoFund) {
-      const quote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
-      cost = { amount: quote.amount, token: 'AO' }
       try {
-        await autoFundQuotedHyperbeamLedger({
-          ...this.autoFund,
-          ledgerId: this.autoFund.ledgerId ?? quote.ledgerId,
-          minimumBalance: this.autoFund.minimumBalance ?? quote.amount,
-          signedBytes: raw.length,
-          tokenId: this.autoFund.tokenId ?? quote.tokenId,
-        })
+        autoFundQuote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
+        cost = { amount: autoFundQuote.amount, token: 'AO' }
       } catch (error) {
-        const message = cleanAutoFundErrorMessage(
+        autoFundUnavailable = cleanAutoFundErrorMessage(
           error instanceof Error ? error.message : String(error),
-        )
-        throw new Error(
-          [
-            `HyperBEAM auto-fund failed: ${message}`,
-            `Required upload credit: ${formatAoAmount(cost.amount)}`,
-            autoFundFailureNote(message),
-            await this.paymentHint(false),
-          ]
-            .filter(Boolean)
-            .join('\n\n'),
         )
       }
     } else {
@@ -442,22 +467,50 @@ export class HyperbeamBundlerClient implements UploadClient {
       }
     }
 
-    const res = await fetch(this.uploadUrl, {
-      body: raw,
-      headers: {
-        accept: 'application/json, text/plain, */*',
-        'content-type': 'application/octet-stream',
-      },
-      method: 'POST',
-    })
-    const body = await res.text()
+    this.seedPreflight ??= preflightHyperbeamBundlerArBalance(this.uploader)
+    await this.seedPreflight
 
-    if (!res.ok) {
-      const preview = responsePreview(body)
-      const paymentHint = res.status === 402 ? await this.paymentHint() : undefined
+    if (this.autoFund && autoFundQuote) {
+      try {
+        await autoFundQuotedHyperbeamLedger({
+          ...this.autoFund,
+          ledgerId: this.autoFund.ledgerId ?? autoFundQuote.ledgerId,
+          minimumBalance: this.autoFund.minimumBalance ?? autoFundQuote.amount,
+          signedBytes: raw.length,
+          tokenId: this.autoFund.tokenId ?? autoFundQuote.tokenId,
+        })
+      } catch (error) {
+        const message = cleanAutoFundErrorMessage(
+          error instanceof Error ? error.message : String(error),
+        )
+        throw new Error(
+          [
+            `HyperBEAM auto-fund failed: ${message}`,
+            `Required upload credit: ${formatAoAmount(cost?.amount ?? autoFundQuote.amount)}`,
+            autoFundFailureNote(message),
+            await this.paymentHint(false),
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+        )
+      }
+    }
+
+    let posted: HyperbeamDataItemPostResult
+    try {
+      posted = await postHyperbeamDataItem(this.uploadUrl, raw, localId)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const needsPayment = message.includes('HTTP 402')
+      const paymentHint = needsPayment
+        ? await this.paymentHint(autoFundUnavailable ? false : undefined)
+        : undefined
       throw new Error(
         [
-          `HyperBEAM bundler upload failed with HTTP ${res.status}${preview ? `: ${preview}` : ''}`,
+          message,
+          needsPayment && autoFundUnavailable
+            ? autoFundUnavailableMessage(autoFundUnavailable)
+            : undefined,
           paymentHint,
         ]
           .filter(Boolean)
@@ -465,7 +518,7 @@ export class HyperbeamBundlerClient implements UploadClient {
       )
     }
 
-    return { cost, id: responseId(res.headers, body) || localId, size }
+    return { cost, id: posted.id || localId, size }
   }
 
   private async paymentHint(includeAutoFundInstruction = true): Promise<string | undefined> {

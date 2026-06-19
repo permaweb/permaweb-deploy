@@ -13,6 +13,7 @@ import {
   type HyperbalanceProfile,
   HYPERBEAM_DEFAULT_LEDGER_ID,
   HYPERBEAM_DEFAULT_LEDGER_ROUTE,
+  type Quote,
   waitForAoAssignmentSlot,
 } from '@permaweb/hyperbalance'
 
@@ -290,7 +291,7 @@ export async function autoFundQuotedHyperbeamLedger(
 
 export async function quoteHyperbeamUpload(
   options: { signedBytes: number } & HyperbeamBundlerQuoteOptions,
-): Promise<{ amount: bigint; ledgerId?: string; tokenId?: string }> {
+): Promise<{ amount: bigint; conditionalFreeTier?: boolean; ledgerId?: string; tokenId?: string }> {
   const profile = await discoverHyperbeamAoBundlerProfile({
     ledgerId: options.ledgerId,
     nodeUrl: options.uploader,
@@ -302,7 +303,12 @@ export async function quoteHyperbeamUpload(
     profile,
   })
 
-  return { amount: quote.amount, ledgerId: quote.ledgerId, tokenId: quote.tokenId }
+  return {
+    amount: quote.amount,
+    conditionalFreeTier: isConditionalFreeTierQuote(quote),
+    ledgerId: quote.ledgerId,
+    tokenId: quote.tokenId,
+  }
 }
 
 export function hyperbeamBundlerLink(uploader: string, id: string, isManifest = false): string {
@@ -411,6 +417,30 @@ function autoFundUnavailableMessage(message: string): string {
   ].join('\n')
 }
 
+export function isConditionalFreeTierQuote(quote: Pick<Quote, 'advisories' | 'amount'>): boolean {
+  return (
+    quote.amount === 0n &&
+    (quote.advisories?.some((advisory) => advisory.code === 'conditional-free-tier') ?? false)
+  )
+}
+
+export function hyperbeamFreeTierExhaustedMessage(preview?: string): string {
+  const suffix = preview ? `: ${preview}` : ''
+  return [
+    `HyperBEAM bundler free-tier quota was exhausted during upload settlement${suffix}`,
+    'The node is now requiring AO payment. Direct quote calls do not reserve free-tier quota, so retry after funding the local ledger.',
+  ].join('\n\n')
+}
+
+function uploadErrorPreview(message: string, status: number): string | undefined {
+  const marker = `HTTP ${status}`
+  const start = message.indexOf(marker)
+  if (start < 0) return undefined
+
+  const suffix = message.slice(start + marker.length).trim()
+  return suffix.startsWith(':') ? suffix.slice(1).trim() || undefined : undefined
+}
+
 export class HyperbeamBundlerClient implements UploadClient {
   private readonly autoFund?: HyperbeamBundlerAutoFundOptions
   private readonly quote: HyperbeamBundlerQuoteOptions
@@ -446,13 +476,17 @@ export class HyperbeamBundlerClient implements UploadClient {
     const localId = item.id || toBase64Url(new DataItem(raw).id)
     const size: UploadSize = { payloadBytes: data.length, signedBytes: raw.length }
     let autoFundUnavailable: string | undefined
-    let autoFundQuote: { amount: bigint; ledgerId?: string; tokenId?: string } | undefined
+    let autoFundQuote:
+      | { amount: bigint; conditionalFreeTier?: boolean; ledgerId?: string; tokenId?: string }
+      | undefined
     let cost: UploadCost | undefined
+    let conditionalFreeTierQuote = false
 
     if (this.autoFund) {
       try {
         autoFundQuote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
         cost = { amount: autoFundQuote.amount, token: 'AO' }
+        conditionalFreeTierQuote = autoFundQuote.conditionalFreeTier ?? false
       } catch (error) {
         autoFundUnavailable = cleanAutoFundErrorMessage(
           error instanceof Error ? error.message : String(error),
@@ -462,6 +496,7 @@ export class HyperbeamBundlerClient implements UploadClient {
       try {
         const quote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
         cost = { amount: quote.amount, token: 'AO' }
+        conditionalFreeTierQuote = quote.conditionalFreeTier ?? false
       } catch {
         cost = undefined
       }
@@ -503,11 +538,15 @@ export class HyperbeamBundlerClient implements UploadClient {
       const message = error instanceof Error ? error.message : String(error)
       const needsPayment = message.includes('HTTP 402')
       const paymentHint = needsPayment
-        ? await this.paymentHint(autoFundUnavailable ? false : undefined)
+        ? await this.paymentHint(this.autoFund || autoFundUnavailable ? false : undefined)
         : undefined
+      const uploadMessage =
+        needsPayment && conditionalFreeTierQuote
+          ? hyperbeamFreeTierExhaustedMessage(uploadErrorPreview(message, 402))
+          : message
       throw new Error(
         [
-          message,
+          uploadMessage,
           needsPayment && autoFundUnavailable
             ? autoFundUnavailableMessage(autoFundUnavailable)
             : undefined,

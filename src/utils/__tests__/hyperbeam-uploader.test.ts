@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   hyperbeamAoFundingHint,
   hyperbeamBundlerLink,
+  hyperbeamFreeTierExhaustedMessage,
+  isConditionalFreeTierQuote,
   parseHyperbeamFundAmount,
 } from '../hyperbeam-uploader.js'
 
@@ -61,5 +63,46 @@ describe('parseHyperbeamFundAmount', () => {
     for (const value of ['0', '-1', '1.5', 'AO']) {
       expect(() => parseHyperbeamFundAmount(value)).toThrow(/positive integer/)
     }
+  })
+})
+
+describe('isConditionalFreeTierQuote', () => {
+  it('detects zero quotes that are conditional on free-tier quota', () => {
+    expect(
+      isConditionalFreeTierQuote({
+        advisories: [
+          {
+            code: 'conditional-free-tier',
+            message: 'Quota-dependent free quote',
+            severity: 'warning',
+          },
+        ],
+        amount: 0n,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not treat paid quotes as conditional free-tier quotes', () => {
+    expect(
+      isConditionalFreeTierQuote({
+        advisories: [
+          {
+            code: 'conditional-free-tier',
+            message: 'Quota-dependent free quote',
+            severity: 'warning',
+          },
+        ],
+        amount: 1n,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('hyperbeamFreeTierExhaustedMessage', () => {
+  it('explains that trundler exhaustion becomes paid fallback', () => {
+    expect(hyperbeamFreeTierExhaustedMessage('Insufficient funds')).toContain(
+      'free-tier quota was exhausted',
+    )
+    expect(hyperbeamFreeTierExhaustedMessage()).toContain('AO payment')
   })
 })

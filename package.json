@@ -1,5 +1,5 @@
 {
-  "name": "permaweb-deploy",
+  "name": "@permaweb/deploy",
   "version": "5.0.0",
   "description": "Permaweb App Deployment Package",
   "main": "dist/index.js",
@@ -103,7 +103,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/permaweb/permaweb-deploy.git"
+    "url": "https://github.com/permaweb/permaweb-deploy"
   },
   "author": "NickJ202",
   "license": "ISC",

@@ -105,9 +105,9 @@ runs:
       with:
         node-version: '20'
 
-    - name: Install permaweb-deploy
+    - name: Install @permaweb/deploy
       shell: bash
-      run: npm install -g permaweb-deploy
+      run: npm install -g @permaweb/deploy
 
     - name: Restore transaction cache
       id: cache-restore

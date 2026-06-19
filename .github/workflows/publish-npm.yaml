@@ -1,4 +1,4 @@
-name: Auto Version and Publish to NPM
+name: Auto Version, Publish, and Tag NPM
 
 on:
   push:
@@ -16,10 +16,6 @@ on:
           - minor
           - patch
 
-permissions:
-  contents: write
-  pull-requests: read
-
 concurrency:
   group: npm-release
   cancel-in-progress: false
@@ -28,6 +24,10 @@ jobs:
   publish:
     if: "${{ github.event_name == 'workflow_dispatch' || !startsWith(github.event.head_commit.message, 'chore: release ') }}"
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: read
 
     steps:
       - name: Checkout code
@@ -39,8 +39,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          registry-url: https://registry.npmjs.org
+          node-version: '22.14.0'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm with OIDC support
+        run: npm install --global npm@^11.5.1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -150,17 +153,13 @@ jobs:
         env:
           UPDATE_TYPE: ${{ steps.release-type.outputs.update-type }}
 
-      - name: Check if git tag exists
+      - name: Check release availability
         run: |
           if git tag --list "v${PACKAGE_VERSION}" | grep -q .; then
             echo "::error::Tag v${PACKAGE_VERSION} already exists"
             exit 1
           fi
-        env:
-          PACKAGE_VERSION: ${{ steps.package-version.outputs.version }}
 
-      - name: Check if npm version exists
-        run: |
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry=https://registry.npmjs.org > /dev/null 2>&1; then
             echo "::error::${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on npm"
             exit 1
@@ -175,10 +174,8 @@ jobs:
       - name: Build package
         run: pnpm build
 
-      - name: Verify npm authentication
-        run: npm whoami --registry=https://registry.npmjs.org
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to NPM
+        run: npm publish --access public --registry=https://registry.npmjs.org
 
       - name: Commit version bump and tag
         run: |
@@ -191,8 +188,3 @@ jobs:
           git push origin "v${PACKAGE_VERSION}"
         env:
           PACKAGE_VERSION: ${{ steps.package-version.outputs.version }}
-
-      - name: Publish to NPM
-        run: npm publish --access public --registry=https://registry.npmjs.org
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

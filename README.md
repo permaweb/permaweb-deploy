@@ -2,6 +2,8 @@
 
 `permaweb-deploy` uploads static sites, folders, or individual files to Arweave and can optionally update a Permaweb Name `~reference@1.0` ref value with the deployed transaction or manifest ID.
 
+> **Package rename:** The npm package has moved from `permaweb-deploy` to `@permaweb/deploy`. The CLI command remains `permaweb-deploy`.
+
 The CLI uses legacy ANS-104 bundlers for the default upload path, supports HyperBEAM bundlers when selected explicitly, and publishes names updates through [`@permaweb/references`](https://www.npmjs.com/package/@permaweb/references).
 
 ## Table of Contents
@@ -37,7 +39,7 @@ The CLI uses legacy ANS-104 bundlers for the default upload path, supports Hyper
 Install the CLI in your project:
 
 ```bash
-pnpm add -D permaweb-deploy
+pnpm add -D @permaweb/deploy
 ```
 
 Make your Arweave JWK available with either `DEPLOY_KEY` or `--wallet`:
@@ -80,15 +82,15 @@ For repeatable project scripts, add a build-and-deploy command:
 ## Installation Options
 
 ```bash
-pnpm add -D permaweb-deploy
+pnpm add -D @permaweb/deploy
 ```
 
 ```bash
-npm install --save-dev permaweb-deploy
+npm install --save-dev @permaweb/deploy
 ```
 
 ```bash
-yarn add --dev permaweb-deploy
+yarn add --dev @permaweb/deploy
 ```
 
 ## Prerequisites

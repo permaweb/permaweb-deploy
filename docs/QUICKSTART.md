@@ -3,7 +3,7 @@
 ## Install
 
 ```bash
-pnpm add -D permaweb-deploy
+pnpm add -D @permaweb/deploy
 ```
 
 ## Configure A Wallet

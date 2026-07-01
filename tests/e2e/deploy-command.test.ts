@@ -41,6 +41,9 @@ function mockHyperbeamBundler(baseUrl: string, id = 'mock-hyperbeam-dataitem-id'
     http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
       HttpResponse.text('1'),
     ),
+    http.post(`${baseUrl}/~arweave-byte-pricing@1.0/preflight`, () =>
+      HttpResponse.text('preflight route unavailable', { status: 500 }),
+    ),
     http.get(`${baseUrl}/~arweave-byte-pricing@1.0/quote`, () => HttpResponse.text('1000')),
     http.post(
       `${baseUrl}/~bundler@1.0/item`,
@@ -523,6 +526,72 @@ describe(
         expect(result.error).toBeDefined()
         expect(result.error?.message).toContain('node-deposit-address')
         expect(result.error?.message).toContain('default')
+      })
+
+      it('should preflight the exact signed HyperBEAM request before auto-funding', async () => {
+        let ledgerBalanceReads = 0
+        let preflightBody: unknown
+
+        server.use(
+          http.post(
+            'https://hyperbeam.test/~arweave-byte-pricing@1.0/preflight',
+            async ({ request }) => {
+              preflightBody = await request.json()
+
+              return HttpResponse.json({
+                amount: '0',
+                decision: 'free',
+                'payment-required': false,
+              })
+            },
+          ),
+          http.get('https://hyperbeam.test/~p4@1.0/balance', () => {
+            ledgerBalanceReads += 1
+            return HttpResponse.text('0')
+          }),
+          http.post(
+            'https://hyperbeam.test/~bundler@1.0/item',
+            () =>
+              new HttpResponse('<html><title>HyperBEAM</title></html>', {
+                headers: { id: 'mock-preflight-hyperbeam-dataitem-id' },
+                status: 200,
+              }),
+          ),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
+          '--no-dedupe',
+        ])
+
+        const body = preflightBody as {
+          amount?: unknown
+          request?: {
+            data?: unknown[]
+            method?: unknown
+            path?: unknown
+            'signing-format'?: unknown
+          }
+          resource?: unknown
+        }
+
+        expect(result.error).toBeUndefined()
+        expect(Number(body.amount)).toBeGreaterThan(0)
+        expect(body.resource).toBe('arweave-bytes')
+        expect(body.request?.method).toBe('POST')
+        expect(body.request?.path).toBe('/~bundler@1.0/item?codec-device=ans104@1.0')
+        expect(body.request?.['signing-format']).toBe('ans104')
+        expect(body.request?.data?.length).toBeGreaterThan(0)
+        expect(ledgerBalanceReads).toBe(0)
       })
 
       it('should fall back to direct upload when auto-fund is unavailable', async () => {

@@ -100,6 +100,13 @@ export interface HyperbeamBundlerQuoteOptions {
   uploader: string
 }
 
+interface HyperbeamUploadQuote {
+  amount: bigint
+  ledgerId?: string
+  paymentRequired?: boolean
+  tokenId?: string
+}
+
 export interface HyperbeamDataItemPostResult {
   body: string
   id?: string
@@ -290,7 +297,7 @@ export async function autoFundQuotedHyperbeamLedger(
 
 export async function quoteHyperbeamUpload(
   options: { signedBytes: number } & HyperbeamBundlerQuoteOptions,
-): Promise<{ amount: bigint; ledgerId?: string; tokenId?: string }> {
+): Promise<HyperbeamUploadQuote> {
   const profile = await discoverHyperbeamAoBundlerProfile({
     ledgerId: options.ledgerId,
     nodeUrl: options.uploader,
@@ -303,6 +310,64 @@ export async function quoteHyperbeamUpload(
   })
 
   return { amount: quote.amount, ledgerId: quote.ledgerId, tokenId: quote.tokenId }
+}
+
+export async function preflightHyperbeamUpload(
+  options: {
+    request: Parameters<HyperbalanceClient['preflightAuto']>[0]['request']
+    signedBytes: number
+  } & HyperbeamBundlerQuoteOptions,
+): Promise<HyperbeamUploadQuote> {
+  const profile = await discoverHyperbeamAoBundlerProfile({
+    ledgerId: options.ledgerId,
+    nodeUrl: options.uploader,
+    tokenId: options.tokenId,
+  })
+  const quote = await new HyperbalanceClient({ nodeUrl: options.uploader }).preflightAuto({
+    action: options.quoteAction ?? 'hyperbeam-upload',
+    params: { bytes: options.signedBytes },
+    profile,
+    request: options.request,
+  })
+
+  return {
+    amount: quote.amount,
+    ledgerId: quote.ledgerId,
+    paymentRequired: quote.paymentRequired,
+    tokenId: quote.tokenId,
+  }
+}
+
+async function preflightOrQuoteHyperbeamUpload(
+  options: {
+    request: Parameters<HyperbalanceClient['preflightAuto']>[0]['request']
+    signedBytes: number
+  } & HyperbeamBundlerQuoteOptions,
+): Promise<HyperbeamUploadQuote> {
+  try {
+    return await preflightHyperbeamUpload(options)
+  } catch {
+    return quoteHyperbeamUpload(options)
+  }
+}
+
+function signedHyperbeamUploadRequest(
+  uploadPath: string,
+  data: Uint8Array,
+): Parameters<HyperbalanceClient['preflightAuto']>[0]['request'] {
+  return {
+    data: [...data],
+    method: 'POST',
+    path: uploadPath,
+    'signing-format': 'ans104',
+  }
+}
+
+function shouldEnsureHyperbeamCredit(
+  autoFund: HyperbeamBundlerAutoFundOptions,
+  quote: HyperbeamUploadQuote,
+): boolean {
+  return autoFund.minimumBalance !== undefined || quote.paymentRequired !== false
 }
 
 export function hyperbeamBundlerLink(uploader: string, id: string, isManifest = false): string {
@@ -417,6 +482,7 @@ export class HyperbeamBundlerClient implements UploadClient {
   private seedPreflight?: Promise<void>
   private readonly signer: unknown
   private readonly uploader: string
+  private readonly uploadPath: string
   private readonly uploadUrl: string
 
   constructor({ autoFund, deployKey, quote, uploadPath, uploader }: HyperbeamBundlerOptions) {
@@ -428,6 +494,7 @@ export class HyperbeamBundlerClient implements UploadClient {
     this.quote = quote ?? { uploader }
     this.signer = new ArweaveSigner(jwk)
     this.uploader = uploader
+    this.uploadPath = uploadPath
     this.uploadUrl = normalizeUploadUrl(uploader, uploadPath)
   }
 
@@ -446,12 +513,16 @@ export class HyperbeamBundlerClient implements UploadClient {
     const localId = item.id || toBase64Url(new DataItem(raw).id)
     const size: UploadSize = { payloadBytes: data.length, signedBytes: raw.length }
     let autoFundUnavailable: string | undefined
-    let autoFundQuote: { amount: bigint; ledgerId?: string; tokenId?: string } | undefined
+    let autoFundQuote: HyperbeamUploadQuote | undefined
     let cost: UploadCost | undefined
 
     if (this.autoFund) {
       try {
-        autoFundQuote = await quoteHyperbeamUpload({ ...this.quote, signedBytes: raw.length })
+        autoFundQuote = await preflightOrQuoteHyperbeamUpload({
+          ...this.quote,
+          request: signedHyperbeamUploadRequest(this.uploadPath, raw),
+          signedBytes: raw.length,
+        })
         cost = { amount: autoFundQuote.amount, token: 'AO' }
       } catch (error) {
         autoFundUnavailable = cleanAutoFundErrorMessage(
@@ -470,7 +541,11 @@ export class HyperbeamBundlerClient implements UploadClient {
     this.seedPreflight ??= preflightHyperbeamBundlerArBalance(this.uploader)
     await this.seedPreflight
 
-    if (this.autoFund && autoFundQuote) {
+    if (
+      this.autoFund &&
+      autoFundQuote &&
+      shouldEnsureHyperbeamCredit(this.autoFund, autoFundQuote)
+    ) {
       try {
         await autoFundQuotedHyperbeamLedger({
           ...this.autoFund,

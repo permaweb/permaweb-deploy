@@ -41,6 +41,9 @@ function mockHyperbeamBundler(baseUrl: string, id = 'mock-hyperbeam-dataitem-id'
     http.get('https://arweave.net/wallet/node-deposit-address/balance', () =>
       HttpResponse.text('1'),
     ),
+    http.post(`${baseUrl}/~arweave-byte-pricing@1.0/preflight`, () =>
+      HttpResponse.text('preflight route unavailable', { status: 500 }),
+    ),
     http.get(`${baseUrl}/~arweave-byte-pricing@1.0/quote`, () => HttpResponse.text('1000')),
     http.post(
       `${baseUrl}/~bundler@1.0/item`,
@@ -523,6 +526,50 @@ describe(
         expect(result.error).toBeDefined()
         expect(result.error?.message).toContain('node-deposit-address')
         expect(result.error?.message).toContain('default')
+      })
+
+      it('should size auto-funding from the byte-count quote without an exact-request preflight', async () => {
+        let preflightPosted = false
+        let quoteReads = 0
+
+        server.use(
+          http.post('https://hyperbeam.test/~arweave-byte-pricing@1.0/preflight', () => {
+            preflightPosted = true
+            return HttpResponse.text('preflight route unavailable', { status: 500 })
+          }),
+          http.get('https://hyperbeam.test/~arweave-byte-pricing@1.0/quote', () => {
+            quoteReads += 1
+            return HttpResponse.text('1000')
+          }),
+          // Aggregated p4 balance already covers the byte quote, so no AO transfer is needed.
+          http.get('https://hyperbeam.test/~p4@1.0/balance', () => HttpResponse.text('1000000000')),
+          http.post(
+            'https://hyperbeam.test/~bundler@1.0/item',
+            () =>
+              new HttpResponse('<html><title>HyperBEAM</title></html>', {
+                headers: { id: 'mock-quote-funded-hyperbeam-dataitem-id' },
+                status: 200,
+              }),
+          ),
+        )
+
+        const result = await runCommand([
+          'upload',
+          '--deploy-file',
+          './tests/fixtures/test-app/index.html',
+          '--wallet',
+          './tests/fixtures/test_wallet.json',
+          '--uploader-type',
+          'hyperbeam',
+          '--uploader',
+          'https://hyperbeam.test',
+          '--hyperbeam-auto-fund',
+          '--no-dedupe',
+        ])
+
+        expect(result.error).toBeUndefined()
+        expect(preflightPosted).toBe(false)
+        expect(quoteReads).toBeGreaterThan(0)
       })
 
       it('should fall back to direct upload when auto-fund is unavailable', async () => {

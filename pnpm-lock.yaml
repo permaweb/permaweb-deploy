@@ -21,8 +21,8 @@ importers:
         specifier: ^0.0.85
         version: 0.0.85(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       '@permaweb/hyperbalance':
-        specifier: ^0.1.0
-        version: 0.1.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+        specifier: ^0.2.3
+        version: 0.2.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       '@permaweb/references':
         specifier: ^0.1.0
         version: 0.1.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(arweave@1.15.7)
@@ -1120,8 +1120,8 @@ packages:
     resolution: {integrity: sha512-0Xfjlt3T4J6SV6YFu9tMyM5fVq/yImjRZGVsZWGKBbboZU8SZ5HlgC+JenjJs9u/MaU1pecyhbofa7sITdebwQ==}
     engines: {node: '>=18'}
 
-  '@permaweb/hyperbalance@0.1.0':
-    resolution: {integrity: sha512-lg2s4RpEk5UTEzjx4ErIclMZ9zIlAmkesv/PZHxO7xZ/083uQ3wfMaQCi40LbYONlJrzIapA12s6uA74YM6VqQ==}
+  '@permaweb/hyperbalance@0.2.3':
+    resolution: {integrity: sha512-Wg/CGeO9hdSOKz0KZljLY7REytGlDP8Plseq2LiIoXkyp+VcQrHCyOhbDfChLON0ybxvFGWgCJxpqrNKAof3EA==}
     engines: {node: '>=18'}
 
   '@permaweb/protocol-tag-utils@0.0.2':
@@ -5658,7 +5658,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@permaweb/hyperbalance@0.1.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
+  '@permaweb/hyperbalance@0.2.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
     dependencies:
       '@permaweb/aoconnect': 0.0.96(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     transitivePeerDependencies:

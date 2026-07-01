@@ -312,57 +312,6 @@ export async function quoteHyperbeamUpload(
   return { amount: quote.amount, ledgerId: quote.ledgerId, tokenId: quote.tokenId }
 }
 
-export async function preflightHyperbeamUpload(
-  options: {
-    request: Parameters<HyperbalanceClient['preflightAuto']>[0]['request']
-    signedBytes: number
-  } & HyperbeamBundlerQuoteOptions,
-): Promise<HyperbeamUploadQuote> {
-  const profile = await discoverHyperbeamAoBundlerProfile({
-    ledgerId: options.ledgerId,
-    nodeUrl: options.uploader,
-    tokenId: options.tokenId,
-  })
-  const quote = await new HyperbalanceClient({ nodeUrl: options.uploader }).preflightAuto({
-    action: options.quoteAction ?? 'hyperbeam-upload',
-    params: { bytes: options.signedBytes },
-    profile,
-    request: options.request,
-  })
-
-  return {
-    amount: quote.amount,
-    ledgerId: quote.ledgerId,
-    paymentRequired: quote.paymentRequired,
-    tokenId: quote.tokenId,
-  }
-}
-
-async function preflightOrQuoteHyperbeamUpload(
-  options: {
-    request: Parameters<HyperbalanceClient['preflightAuto']>[0]['request']
-    signedBytes: number
-  } & HyperbeamBundlerQuoteOptions,
-): Promise<HyperbeamUploadQuote> {
-  try {
-    return await preflightHyperbeamUpload(options)
-  } catch {
-    return quoteHyperbeamUpload(options)
-  }
-}
-
-function signedHyperbeamUploadRequest(
-  uploadPath: string,
-  data: Uint8Array,
-): Parameters<HyperbalanceClient['preflightAuto']>[0]['request'] {
-  return {
-    data: [...data],
-    method: 'POST',
-    path: uploadPath,
-    'signing-format': 'ans104',
-  }
-}
-
 function shouldEnsureHyperbeamCredit(
   autoFund: HyperbeamBundlerAutoFundOptions,
   quote: HyperbeamUploadQuote,
@@ -482,7 +431,6 @@ export class HyperbeamBundlerClient implements UploadClient {
   private seedPreflight?: Promise<void>
   private readonly signer: unknown
   private readonly uploader: string
-  private readonly uploadPath: string
   private readonly uploadUrl: string
 
   constructor({ autoFund, deployKey, quote, uploadPath, uploader }: HyperbeamBundlerOptions) {
@@ -494,7 +442,6 @@ export class HyperbeamBundlerClient implements UploadClient {
     this.quote = quote ?? { uploader }
     this.signer = new ArweaveSigner(jwk)
     this.uploader = uploader
-    this.uploadPath = uploadPath
     this.uploadUrl = normalizeUploadUrl(uploader, uploadPath)
   }
 
@@ -518,9 +465,8 @@ export class HyperbeamBundlerClient implements UploadClient {
 
     if (this.autoFund) {
       try {
-        autoFundQuote = await preflightOrQuoteHyperbeamUpload({
+        autoFundQuote = await quoteHyperbeamUpload({
           ...this.quote,
-          request: signedHyperbeamUploadRequest(this.uploadPath, raw),
           signedBytes: raw.length,
         })
         cost = { amount: autoFundQuote.amount, token: 'AO' }

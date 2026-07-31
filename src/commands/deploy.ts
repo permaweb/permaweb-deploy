@@ -88,6 +88,7 @@ export default class Deploy extends Command {
         'names-gateway': baseConfig['names-gateway'],
         'names-graphql': baseConfig['names-graphql'],
         'names-namespace': baseConfig['names-namespace'],
+        'names-node': baseConfig['names-node'],
         'no-dedupe': baseConfig['no-dedupe'],
         'private-key': walletConfig.privateKey,
         'reference-id': baseConfig['reference-id'],
@@ -178,21 +179,22 @@ export default class Deploy extends Command {
 
         const spinner = ora()
 
-        spinner.start('Validating names reference')
+        spinner.start('Validating names target')
         const namesTarget = await preflightNamesUpdate({
           deployKey,
           gateway: deployConfig['names-gateway'],
           graphql: deployConfig['names-graphql'],
           name: deployConfig.name,
           namespace: deployConfig['names-namespace'],
+          node: deployConfig['names-node'],
           referenceId: deployConfig['reference-id'],
           sigType: deployConfig['sig-type'] as SignerType,
         }).catch((error) => {
-          spinner.fail('Names reference validation failed')
+          spinner.fail('Names target validation failed')
           throw error
         })
 
-        spinner.succeed('Names reference validated')
+        spinner.succeed('Names target validated')
 
         const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
           error: (msg) => this.error(msg),
@@ -202,22 +204,23 @@ export default class Deploy extends Command {
 
         this.log('')
 
-        spinner.start('Updating names reference')
+        spinner.start('Updating names target')
         const namesUpdate = await publishNamesUpdate({
           deployKey,
           gateway: deployConfig['names-gateway'],
           graphql: deployConfig['names-graphql'],
           name: namesTarget.name,
           namespace: deployConfig['names-namespace'],
-          referenceId: namesTarget.referenceId,
+          node: deployConfig['names-node'],
+          referenceId: deployConfig['reference-id'],
           sigType: deployConfig['sig-type'] as SignerType,
           value: txOrManifestId,
         }).catch((error) => {
-          spinner.fail('Names reference update failed')
+          spinner.fail('Names target update failed')
           throw error
         })
 
-        spinner.succeed('Names reference updated')
+        spinner.succeed('Names target updated')
 
         const bundlerLink =
           deployConfig['uploader-type'] === 'hyperbeam' && effectiveUploader
@@ -238,7 +241,8 @@ export default class Deploy extends Command {
 
         rows.push(
           ...(namesUpdate.name ? ([['Name', chalk.yellow(namesUpdate.name)]] as DisplayRow[]) : []),
-          ['Reference ID', chalk.cyan(namesUpdate.referenceId)],
+          ['Names Target Kind', chalk.cyan(namesUpdate.kind)],
+          ['Names Target ID', chalk.cyan(namesUpdate.referenceId)],
           ['Names Update ID', chalk.green(namesUpdate.updateId)],
           ['Names Namespace', chalk.gray(namesUpdate.namespace)],
           ['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)],

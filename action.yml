@@ -1,5 +1,5 @@
 name: 'Permaweb Deploy'
-description: 'Deploy static sites to Arweave and optionally update Permaweb Names references.'
+description: 'Deploy static sites to Arweave and optionally update Permaweb Names.'
 author: 'permaweb'
 branding:
   icon: 'upload-cloud'
@@ -13,17 +13,20 @@ inputs:
     description: 'The Permaweb Names namespace name to update'
     required: false
   reference-id:
-    description: 'Reference ID to update directly, bypassing namespace name lookup'
+    description: 'Legacy reference ID to update directly, bypassing namespace name lookup'
     required: false
   names-namespace:
     description: 'Namespace root reference or manifest ID used to resolve name'
     required: false
   names-gateway:
-    description: 'Gateway used for names reference and namespace reads'
+    description: 'Gateway used for names namespace/reference reads and carrier transaction posting'
     required: false
     default: 'https://arweave.net'
   names-graphql:
-    description: 'GraphQL endpoint used for names reference discovery'
+    description: 'GraphQL endpoint used for names reference and carrier discovery'
+    required: false
+  names-node:
+    description: 'HyperBEAM node used for carrier-backed names reads'
     required: false
   deploy-folder:
     description: 'Path to the folder containing built static files to deploy'
@@ -94,7 +97,7 @@ outputs:
     description: 'The Permaweb Names namespace name that was used for the deployment'
     value: ${{ steps.name.outputs.name }}
   reference-id:
-    description: 'The Permaweb Names reference ID that was updated'
+    description: 'The Permaweb Names reference or carrier process ID that was updated'
     value: ${{ steps.deploy.outputs.reference-id }}
 
 runs:
@@ -181,6 +184,9 @@ runs:
         if [[ -n "${{ inputs.names-graphql }}" ]]; then
           ARGS+=(--names-graphql "${{ inputs.names-graphql }}")
         fi
+        if [[ -n "${{ inputs.names-node }}" ]]; then
+          ARGS+=(--names-node "${{ inputs.names-node }}")
+        fi
 
         if [[ -n "${{ inputs.deploy-file }}" ]]; then
           ARGS+=(--deploy-file "${{ inputs.deploy-file }}")
@@ -232,7 +238,7 @@ runs:
           TX_ID=$(echo "$OUTPUT" | grep -oE '[a-zA-Z0-9_-]{43}' | head -1 || echo "")
         fi
 
-        REFERENCE_ID=$(echo "$OUTPUT" | grep -oP 'Reference ID\s*│\s*\K\S+' || echo "${{ inputs.reference-id }}")
+        REFERENCE_ID=$(echo "$OUTPUT" | grep -oP '(?:Names Target ID|Reference ID)\s*│\s*\K\S+' || echo "${{ inputs.reference-id }}")
         DEPLOYMENT_URL="https://arweave.net/${TX_ID}"
 
         echo "tx-id=$TX_ID" >> "$GITHUB_OUTPUT"
@@ -266,7 +272,7 @@ runs:
           const deploymentUrl = '${{ steps.deploy.outputs.deployment-url }}';
           const txId = '${{ steps.deploy.outputs.tx-id }}';
           const name = '${{ steps.name.outputs.name }}';
-          const referenceId = '${{ steps.deploy.outputs.reference-id }}';
+          const targetId = '${{ steps.deploy.outputs.reference-id }}';
 
           const body = `## Permaweb Preview Deployed
 
@@ -276,9 +282,9 @@ runs:
           |----------|-------|
           | Transaction ID | \`${txId}\` |
           | Namespace Name | ${name || 'n/a'} |
-          | Reference ID | ${referenceId || 'n/a'} |
+          | Names Target ID | ${targetId || 'n/a'} |
 
-          The namespace reference has been updated to point at this deployment.`;
+          The namespace name has been updated to point at this deployment.`;
 
           const { data: comments } = await github.rest.issues.listComments({
             owner: context.repo.owner,

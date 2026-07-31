@@ -24,8 +24,8 @@ importers:
         specifier: ^0.2.3
         version: 0.2.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       '@permaweb/references':
-        specifier: ^0.1.0
-        version: 0.1.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(arweave@1.15.7)
+        specifier: ^1.0.0
+        version: 1.0.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(arweave@1.15.7)
       arweave:
         specifier: ^1.15.7
         version: 1.15.7
@@ -1127,8 +1127,8 @@ packages:
   '@permaweb/protocol-tag-utils@0.0.2':
     resolution: {integrity: sha512-2IiKu71W7pkHKIzxabCGQ5q8DSppZaE/sPcPF2hn+OWwfe04M7b5X5LHRXQNPRuxHWuioieGdPQb3F7apOlffQ==}
 
-  '@permaweb/references@0.1.0':
-    resolution: {integrity: sha512-M/W1lIr5e6/wKVc3DBQzbqmum86FjewRHX2UD3zrTGDQ93ZdNNULRCOuB7FeP9sFS/O894mEnz1wlLqbzi4Lng==}
+  '@permaweb/references@1.0.0':
+    resolution: {integrity: sha512-A+RLu9u9Zwt0Z7AzdMMotzQtwhAstDrW7puhe2j4ql5rmOV86WU3cdumABy6l3lM7qlN4CZ3Voz8kyttIutPiA==}
     peerDependencies:
       arbundles: '*'
       arweave: '*'
@@ -5669,7 +5669,7 @@ snapshots:
 
   '@permaweb/protocol-tag-utils@0.0.2': {}
 
-  '@permaweb/references@0.1.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(arweave@1.15.7)':
+  '@permaweb/references@1.0.0(arbundles@0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@5.0.10))(arweave@1.15.7)':
     optionalDependencies:
       arbundles: 0.11.2(arweave@1.15.7)(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       arweave: 1.15.7

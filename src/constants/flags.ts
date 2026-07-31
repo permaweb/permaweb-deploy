@@ -120,19 +120,26 @@ export const globalFlags = {
   namesGateway: createFlagConfig<string>({
     flag: Flags.string({
       default: 'https://arweave.net',
-      description: 'Gateway used for names reference and namespace reads.',
+      description:
+        'Gateway used for names namespace/reference reads and carrier transaction posting.',
       required: false,
     }),
   }),
   namesGraphql: createFlagConfig<string | undefined>({
     flag: Flags.string({
-      description: 'GraphQL endpoint used for names reference discovery.',
+      description: 'GraphQL endpoint used for names reference and carrier discovery.',
       required: false,
     }),
   }),
   namesNamespace: createFlagConfig<string | undefined>({
     flag: Flags.string({
       description: 'Namespace root reference or manifest ID used to resolve --name.',
+      required: false,
+    }),
+  }),
+  namesNode: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'HyperBEAM node used for carrier-backed names reads.',
       required: false,
     }),
   }),
@@ -153,7 +160,7 @@ export const globalFlags = {
   }),
   referenceId: createFlagConfig<string | undefined>({
     flag: Flags.string({
-      description: 'Reference ID to update directly, bypassing namespace name lookup.',
+      description: 'Legacy reference ID to update directly, bypassing namespace name lookup.',
       required: false,
     }),
   }),
@@ -186,7 +193,7 @@ export const globalFlags = {
   useNames: createFlagConfig<boolean>({
     flag: Flags.boolean({
       default: false,
-      description: 'Update a Permaweb Names reference after upload.',
+      description: 'Update a Permaweb Name after upload.',
       required: false,
     }),
   }),
@@ -225,6 +232,7 @@ export const deployFlags = {
   'names-gateway': globalFlags.namesGateway.flag,
   'names-graphql': globalFlags.namesGraphql.flag,
   'names-namespace': globalFlags.namesNamespace.flag,
+  'names-node': globalFlags.namesNode.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
   'private-key': globalFlags.privateKey.flag,
   'reference-id': globalFlags.referenceId.flag,
@@ -243,6 +251,7 @@ export const namesFlags = {
   'names-gateway': globalFlags.namesGateway.flag,
   'names-graphql': globalFlags.namesGraphql.flag,
   'names-namespace': globalFlags.namesNamespace.flag,
+  'names-node': globalFlags.namesNode.flag,
   'reference-id': globalFlags.referenceId.flag,
   'use-names': globalFlags.useNames.flag,
 }
@@ -273,6 +282,7 @@ export interface DeployConfig {
   'names-gateway': string
   'names-graphql'?: string
   'names-namespace'?: string
+  'names-node'?: string
   'no-dedupe': boolean
   'private-key'?: string
   'reference-id'?: string
@@ -301,6 +311,7 @@ export const deployFlagConfigs = {
   'names-gateway': globalFlags.namesGateway,
   'names-graphql': globalFlags.namesGraphql,
   'names-namespace': globalFlags.namesNamespace,
+  'names-node': globalFlags.namesNode,
   'no-dedupe': globalFlags.noDedupe,
   'private-key': globalFlags.privateKey,
   'reference-id': globalFlags.referenceId,

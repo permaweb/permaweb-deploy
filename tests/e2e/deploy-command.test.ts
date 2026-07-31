@@ -30,6 +30,17 @@ function dataItemTags(raw: Buffer): Record<string, string> {
   return Object.fromEntries(new DataItem(raw).tags.map((tag) => [tag.name, tag.value]))
 }
 
+function arweaveTxTags(tx: {
+  tags?: Array<{ name: string; value: string }>
+}): Record<string, string> {
+  return Object.fromEntries(
+    (tx.tags ?? []).map((tag) => [
+      Buffer.from(tag.name, 'base64url').toString('utf8'),
+      Buffer.from(tag.value, 'base64url').toString('utf8'),
+    ]),
+  )
+}
+
 function mockHyperbeamBundler(baseUrl: string, id = 'mock-hyperbeam-dataitem-id'): void {
   server.use(
     http.get(`${baseUrl}/~meta@1.0/info/address`, () => HttpResponse.text('node-deposit-address')),
@@ -125,7 +136,7 @@ describe(
       expect(result.error).toBeUndefined()
     })
 
-    it('should deploy and update a names reference by reference id', async () => {
+    it('should deploy and update a legacy names reference by reference id', async () => {
       const authority = walletAddress(TEST_ARWEAVE_WALLET)
       let contentUploads = 0
       let namesBundlerUploads = 0
@@ -201,7 +212,7 @@ describe(
       expect(namesBundlerUploads).toBe(1)
     })
 
-    it('should validate names reference authority before uploading content', async () => {
+    it('should validate legacy names reference authority before uploading content', async () => {
       let namesUploads = 0
       let uploadAttempts = 0
 
@@ -264,6 +275,124 @@ describe(
       )
       expect(uploadAttempts).toBe(0)
       expect(namesUploads).toBe(0)
+    })
+
+    it('should deploy and update a carrier-backed name', async () => {
+      const authority = walletAddress(TEST_ARWEAVE_WALLET)
+      const carrierProcessId = 'p'.repeat(43)
+      const deployedId = 'm'.repeat(43)
+      let contentUploads = 0
+      let carrierUpdates = 0
+      let postedCarrierTx:
+        | { target?: string; tags?: Array<{ name: string; value: string }> }
+        | undefined
+
+      server.use(
+        http.post('https://arweave.net/graphql', async ({ request }) => {
+          const body = (await request.json()) as {
+            query?: string
+            variables?: { id?: string }
+          }
+
+          if (body.query?.includes('CarrierProcess')) {
+            return HttpResponse.json({
+              data: {
+                transaction:
+                  body.variables?.id === carrierProcessId
+                    ? {
+                        id: carrierProcessId,
+                        tags: [{ name: 'execution-device', value: 'carrier@1.0' }],
+                      }
+                    : null,
+              },
+            })
+          }
+
+          if (body.query?.includes('transaction(id')) {
+            return HttpResponse.json({ data: { transaction: null } })
+          }
+
+          return HttpResponse.json({
+            data: {
+              transactions: {
+                edges: [],
+                pageInfo: { hasNextPage: false },
+              },
+            },
+          })
+        }),
+        http.get('https://arweave.net/namespace-manifest-id/serialize~json@1.0', () =>
+          HttpResponse.json({
+            data: JSON.stringify({
+              manifest: 'arweave/paths',
+              paths: {
+                'my-app': { id: carrierProcessId },
+              },
+            }),
+          }),
+        ),
+        http.get('https://node.test/*', ({ request }) => {
+          if (request.url.includes(`${carrierProcessId}~process@1.0/compute`)) {
+            return HttpResponse.json({
+              balances: { [authority]: '1' },
+              'execution-device': 'carrier@1.0',
+              name: 'my-app',
+              orders: {},
+              'swap-height': '1',
+              'total-supply': '1',
+              value: { target: 'o'.repeat(43) },
+            })
+          }
+
+          return HttpResponse.text('not found', { status: 404 })
+        }),
+        http.get('https://arweave.net/tx_anchor', () =>
+          HttpResponse.text('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
+        ),
+        http.get('https://arweave.net/price/0/:target', () => HttpResponse.text('1')),
+        http.get(`https://arweave.net/wallet/${authority}/balance`, () =>
+          HttpResponse.text('1000000'),
+        ),
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/v1/tx/:token`, async ({ request }) => {
+          const raw = Buffer.from(await request.arrayBuffer())
+          contentUploads += 1
+          expect(raw.byteLength).toBeGreaterThan(0)
+          return HttpResponse.json({ id: deployedId })
+        }),
+        http.post('https://arweave.net/tx', async ({ request }) => {
+          carrierUpdates += 1
+          postedCarrierTx = (await request.json()) as {
+            target?: string
+            tags?: Array<{ name: string; value: string }>
+          }
+          return HttpResponse.json({ id: 'posted-carrier-update-id' })
+        }),
+      )
+
+      const result = await runCommand([
+        'deploy',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--no-dedupe',
+        '--use-names',
+        '--name',
+        'my-app',
+        '--names-namespace',
+        'namespace-manifest-id',
+        '--names-node',
+        'https://node.test',
+      ])
+
+      expect(result.error).toBeUndefined()
+      expect(contentUploads).toBe(1)
+      expect(carrierUpdates).toBe(1)
+      expect(postedCarrierTx?.target).toBe(carrierProcessId)
+      expect(arweaveTxTags(postedCarrierTx ?? {})).toMatchObject({
+        action: 'set',
+        'reference-value': deployedId,
+      })
     })
 
     it('should reject invalid dedupe-cache-max-entries', async () => {

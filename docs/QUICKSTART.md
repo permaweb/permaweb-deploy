@@ -28,7 +28,7 @@ permaweb-deploy upload --wallet ./wallet.json --deploy-folder ./dist
 permaweb-deploy deploy --use-names --name my-app --wallet ./wallet.json
 ```
 
-## Upload And Publish A Reference
+## Upload And Publish A Legacy Reference
 
 ```bash
 permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet.json

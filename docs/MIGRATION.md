@@ -1,6 +1,6 @@
 # Names Migration Guide
 
-This version publishes namespace updates through `@permaweb/references`.
+This version publishes Permaweb Names updates through `@permaweb/references`.
 
 ## Deploy Commands
 
@@ -16,7 +16,7 @@ Upload and update a namespace name:
 permaweb-deploy deploy --use-names --name my-app --wallet ./wallet.json
 ```
 
-Upload and update a direct reference:
+Upload and update a direct legacy reference:
 
 ```bash
 permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet.json
@@ -35,11 +35,12 @@ permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet
 
 ## Names Options
 
-- `--use-names`: update a Permaweb Names reference after upload.
+- `--use-names`: update a Permaweb Name after upload.
 - `--name`: resolve and update a name inside the configured namespace.
-- `--reference-id`: update a reference directly.
+- `--reference-id`: update a legacy reference directly.
 - `--names-namespace`: override the namespace root reference or manifest ID.
-- `--names-gateway`: gateway used for reference and namespace reads.
-- `--names-graphql`: GraphQL endpoint for reference discovery.
+- `--names-gateway`: gateway used for namespace/reference reads and carrier transaction posting.
+- `--names-graphql`: GraphQL endpoint for reference and carrier discovery.
+- `--names-node`: HyperBEAM node for carrier-backed names reads.
 
 Names updates require an Arweave JWK signer.

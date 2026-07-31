@@ -3,7 +3,7 @@
 `permaweb-deploy` is now split into two flows:
 
 - `upload`: upload a file or folder without changing a name.
-- `deploy`: upload a file or folder, then optionally publish a Permaweb Names reference update.
+- `deploy`: upload a file or folder, then optionally publish a Permaweb Names update.
 
 ## Current CLI
 
@@ -15,7 +15,7 @@ permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet
 
 ## Publishing
 
-Names publishing uses `@permaweb/references` and accepts either a namespace name or a direct reference ID. The default namespace can be overridden with `--names-namespace`.
+Names publishing uses `@permaweb/references` and accepts either a namespace name or a direct legacy reference ID. Namespace names can resolve to carrier-backed names or legacy references. The default namespace can be overridden with `--names-namespace`.
 
 ## Uploads
 

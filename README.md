@@ -342,7 +342,8 @@ permaweb-deploy/
 
 - **`DEPLOY_KEY environment variable not set`:** pass `--wallet`, pass `--private-key`, or set `DEPLOY_KEY`.
 - **`Names updates currently require --sig-type arweave`:** use an Arweave JWK for names updates.
-- **`Name [...] is not controlled by signer in namespace ...`:** verify the namespace manifest contains the name and use the wallet that controls it.
+- **`Name [...] not found in namespace ...`:** verify the namespace manifest and spelling.
+- **`Name [...] is controlled by ..., not signer ...`:** use the wallet that controls the name.
 - **`signer is not reference authority`:** use the wallet that controls the target legacy reference.
 - **`deploy-folder does not exist`:** check the build output path.
 - **`deploy-file does not exist`:** check the file path.

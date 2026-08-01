@@ -159,7 +159,7 @@ describe('names utilities', () => {
       expect(client.getReference).not.toHaveBeenCalled()
     })
 
-    it('errors when the name is not controlled by the signer in the namespace', async () => {
+    it('errors when the name is missing from the namespace', async () => {
       const client = {
         findReferences: vi.fn(),
         getName: vi.fn(async () => {}),
@@ -177,9 +177,33 @@ describe('names utilities', () => {
           namespace: 'namespace-manifest-id',
           signer: signer as never,
         }),
-      ).rejects.toThrow(
-        'Name [missing-name] is not controlled by signer in namespace namespace-manifest-id',
-      )
+      ).rejects.toThrow('Name [missing-name] not found in namespace namespace-manifest-id')
+    })
+
+    it('errors when the name is controlled by another signer', async () => {
+      const client = {
+        findReferences: vi.fn(),
+        getName: vi.fn(async () => ({
+          authority: 'OTHER',
+          kind: 'reference',
+          name: 'my-app',
+          referenceId: 'resolved-reference-id',
+        })),
+        getReference: vi.fn(),
+      }
+      const signer = {
+        address: vi.fn(async () => 'ME'),
+        send: vi.fn(),
+      }
+
+      await expect(
+        resolveNamesReferenceId({
+          client: client as never,
+          name: 'my-app',
+          namespace: 'namespace-manifest-id',
+          signer: signer as never,
+        }),
+      ).rejects.toThrow('Name [my-app] is controlled by OTHER, not signer ME')
     })
   })
 

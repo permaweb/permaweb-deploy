@@ -230,9 +230,13 @@ export async function resolveNamesReferenceId(args: {
   const signerAddress = await args.signer.address()
   const record = await args.client.getName(args.name)
 
-  if (!record || record.authority !== signerAddress) {
+  if (!record) {
+    throw new Error(`Name [${args.name}] not found in namespace ${args.namespace}`)
+  }
+
+  if (record.authority !== signerAddress) {
     throw new Error(
-      `Name [${args.name}] is not controlled by signer in namespace ${args.namespace}`,
+      `Name [${args.name}] is controlled by ${record.authority}, not signer ${signerAddress}`,
     )
   }
 

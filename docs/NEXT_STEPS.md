@@ -21,7 +21,7 @@ Publish a namespace name:
 permaweb-deploy deploy --use-names --name my-app --wallet ./wallet.json
 ```
 
-Publish a direct reference:
+Publish a direct legacy reference:
 
 ```bash
 permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet.json
@@ -29,4 +29,4 @@ permaweb-deploy deploy --use-names --reference-id REFERENCE_ID --wallet ./wallet
 
 ## Notes
 
-The deploy command has one publishing path: references reference updates. Upload-only flows remain available for all supported signer types.
+The deploy command can update carrier-backed names by namespace name and legacy references by name or direct reference ID. Upload-only flows remain available for all supported signer types.

@@ -1,6 +1,6 @@
 # Permaweb Deploy
 
-`permaweb-deploy` uploads static sites, folders, or individual files to Arweave and can optionally update a Permaweb Name `~reference@1.0` ref value with the deployed transaction or manifest ID.
+`permaweb-deploy` uploads static sites, folders, or individual files to Arweave and can optionally update a Permaweb Name with the deployed transaction or manifest ID.
 
 > **Package rename:** The npm package has moved from `permaweb-deploy` to `@permaweb/deploy`. The CLI command remains `permaweb-deploy`.
 
@@ -27,12 +27,12 @@ The CLI uses legacy ANS-104 bundlers for the default upload path, supports Hyper
 ## Features
 
 - **Arweave uploads:** Upload a folder or a single file.
-- **Names publishing:** Update a Permaweb Names reference-id's value after upload.
+- **Names publishing:** Update a Permaweb Name after upload.
 - **Legacy bundler uploads:** Use legacy ANS-104 upload endpoints by default.
 - **HyperBEAM uploads:** Sign ANS-104 items and post them to a HyperBEAM bundler route.
 - **Arweave manifests:** Create manifest `0.2.0` documents for folder deployments, with SPA fallback detection.
 - **Dedupe cache:** Reuse unchanged uploads from `.permaweb-deploy/transaction-cache.json`.
-- **GitHub Action:** Deploy from CI and optionally update a namespace reference.
+- **GitHub Action:** Deploy from CI and optionally update a namespace name.
 
 ## Quick Start
 
@@ -103,7 +103,7 @@ base64 -i wallet.json
 
 Set the encoded value as `DEPLOY_KEY`, or pass `--wallet ./wallet.json`.
 
-Names updates currently require `--sig-type arweave`, because reference updates are signed as ANS-104 data items and posted to the names bundler endpoint. Ethereum, Polygon, and KYVE signers remain supported for upload-only flows.
+Names updates currently require `--sig-type arweave`. Legacy references are signed as ANS-104 data items; carrier-backed names are signed as Arweave transactions. Ethereum, Polygon, and KYVE signers remain supported for upload-only flows.
 
 Use a dedicated deployment wallet and make sure it has enough upload credits/balance for the selected legacy bundler.
 
@@ -117,7 +117,7 @@ permaweb-deploy upload --wallet ./wallet.json --deploy-file ./dist/index.html
 DEPLOY_KEY=$(base64 -i wallet.json) permaweb-deploy upload --deploy-folder ./dist
 ```
 
-Upload and update a reference-id pointed value using the namespace name:
+Upload and update a namespace name:
 
 ```bash
 permaweb-deploy deploy --use-names --name my-app --wallet ./wallet.json
@@ -148,18 +148,19 @@ permaweb-deploy deploy --use-names --name my-app --wallet ./wallet.json --deploy
 
 ## Names Publishing
 
-`--name` resolves the name inside the configured namespace manifest and updates that reference. `--reference-id` bypasses namespace lookup and updates the reference directly.
+`--name` resolves the name inside the configured namespace manifest and updates either the carrier target or the legacy reference value. `--reference-id` bypasses namespace lookup and updates a legacy reference directly.
 
-The default namespace is the phase-2 namespace exported by `@permaweb/references`. Override it with `--names-namespace` when you want to publish against another namespace root reference or manifest.
+The default namespace is the current mainnet names namespace exported by `@permaweb/references`. Override it with `--names-namespace` when you want to publish against another namespace root reference or manifest ID.
 
 Useful flags:
 
-- `--use-names`: update a Permaweb Names reference after upload.
+- `--use-names`: update a Permaweb Name after upload.
 - `--name, -n`: namespace name to update.
-- `--reference-id`: reference ID to update directly.
+- `--reference-id`: legacy reference ID to update directly.
 - `--names-namespace`: namespace root reference or manifest ID used to resolve `--name`.
-- `--names-gateway`: gateway for reference and namespace reads. Default: `https://arweave.net`.
-- `--names-graphql`: GraphQL endpoint for reference discovery. Default: `<names-gateway>/graphql`.
+- `--names-gateway`: gateway for namespace/reference reads and carrier transaction posting. Default: `https://arweave.net`.
+- `--names-graphql`: GraphQL endpoint for reference and carrier discovery. Default: `<names-gateway>/graphql`.
+- `--names-node`: HyperBEAM node for carrier-backed names reads. Defaults to `--names-gateway`.
 
 ## Bundlers
 
@@ -218,7 +219,7 @@ HyperBEAM uploads require an Arweave JWK signer. The default route is `/~bundler
 - `--hyperbeam-token-id`: advanced AO token process ID override.
 - `--hyperbeam-ledger-id`: advanced local HyperBEAM ledger ID override.
 - `--hyperbeam-ao-state-url`: AO state endpoint used while waiting for auto-fund assignment.
-- `--use-names`, `--name`, `--reference-id`, `--names-namespace`, `--names-gateway`, `--names-graphql`: names publishing options.
+- `--use-names`, `--name`, `--reference-id`, `--names-namespace`, `--names-gateway`, `--names-graphql`, `--names-node`: names publishing options.
 
 `upload` accepts upload, wallet, signer, bundler, and dedupe flags only.
 
@@ -306,10 +307,11 @@ When `preview` is enabled, the action generates a namespace name from the reposi
 Action inputs for names publishing:
 
 - `name`: namespace name to update.
-- `reference-id`: reference ID to update directly.
+- `reference-id`: legacy reference ID to update directly.
 - `names-namespace`: namespace root reference or manifest ID.
-- `names-gateway`: gateway for reference and namespace reads.
-- `names-graphql`: GraphQL endpoint for reference discovery.
+- `names-gateway`: gateway for namespace/reference reads and carrier transaction posting.
+- `names-graphql`: GraphQL endpoint for reference and carrier discovery.
+- `names-node`: HyperBEAM node for carrier-backed names reads.
 - `auto-name`: generate a namespace name from PR number or branch name.
 - `preview`: enable `auto-name` and post a PR comment.
 
@@ -339,16 +341,17 @@ permaweb-deploy/
 ## Troubleshooting
 
 - **`DEPLOY_KEY environment variable not set`:** pass `--wallet`, pass `--private-key`, or set `DEPLOY_KEY`.
-- **`Names updates currently require --sig-type arweave`:** reference updates are signed as ANS-104 data items; use an Arweave JWK for names updates.
-- **`Name [...] does not exist in namespace ...`:** verify the namespace manifest contains the name or use `--reference-id`.
-- **`signer is not reference authority`:** use the wallet that controls the target reference.
+- **`Names updates currently require --sig-type arweave`:** use an Arweave JWK for names updates.
+- **`Name [...] not found in namespace ...`:** verify the namespace manifest and spelling.
+- **`Name [...] is controlled by ..., not signer ...`:** use the wallet that controls the name.
+- **`signer is not reference authority`:** use the wallet that controls the target legacy reference.
 - **`deploy-folder does not exist`:** check the build output path.
 - **`deploy-file does not exist`:** check the file path.
 - **Legacy upload rejected:** check the upload endpoint response and retry with another legacy bundler if needed.
 
 ## Dependencies
 
-- **@permaweb/references** - namespace reference reads and writes.
+- **@permaweb/references** - Permaweb Names reads and writes.
 - **@dha-team/arbundles** - ANS-104 data item signing.
 - **@permaweb/aoconnect** - AO network connectivity.
 - **@permaweb/hyperbalance** - HyperBEAM auto-fund support.

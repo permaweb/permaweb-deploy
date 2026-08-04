@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module'
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TEST_ARWEAVE_WALLET } from '../../../tests/constants.js'
 import { createNamesJwkSigner, resolveNamesReferenceId, validateNamesTarget } from '../names.js'
@@ -14,6 +14,8 @@ const arweaveMock = vi.hoisted(() => {
   const tx = {
     addTag: vi.fn(),
     id: 'posted-reference-tx-id',
+    owner: 'mock-owner',
+    reward: '1',
   }
 
   return {
@@ -36,16 +38,28 @@ vi.mock('arweave', () => ({
       },
       wallets: {
         jwkToAddress: vi.fn(async () => arweaveMock.walletAddress),
+        ownerToAddress: vi.fn(async () => arweaveMock.walletAddress),
       },
     }),
   },
 }))
 
 describe('names utilities', () => {
+  beforeEach(() => {
+    arweaveMock.createTransaction.mockClear()
+    arweaveMock.post.mockClear()
+    arweaveMock.sign.mockClear()
+    arweaveMock.tx.addTag.mockClear()
+    arweaveMock.tx.id = 'posted-reference-tx-id'
+    arweaveMock.tx.owner = 'mock-owner'
+    arweaveMock.tx.reward = '1'
+  })
+
   describe('resolveNamesReferenceId', () => {
     it('uses a direct reference id without namespace lookups', async () => {
       const client = {
         findReferences: vi.fn(),
+        getName: vi.fn(),
         getReference: vi.fn(),
       }
       const signer = {
@@ -61,19 +75,27 @@ describe('names utilities', () => {
           referenceId: 'direct-reference-id',
           signer: signer as never,
         }),
-      ).resolves.toEqual({ name: 'my-app', referenceId: 'direct-reference-id' })
+      ).resolves.toEqual({
+        kind: 'reference',
+        name: 'my-app',
+        referenceId: 'direct-reference-id',
+      })
 
+      expect(client.getName).not.toHaveBeenCalled()
       expect(client.getReference).not.toHaveBeenCalled()
       expect(client.findReferences).not.toHaveBeenCalled()
       expect(signer.address).not.toHaveBeenCalled()
     })
 
-    it('resolves a namespace name through the SDK owned-reference lookup', async () => {
+    it('resolves a legacy namespace name through the SDK name lookup', async () => {
       const client = {
-        findReferences: vi.fn(async () => [
-          { name: 'other-app', referenceId: 'other-reference-id' },
-          { name: 'my-app', referenceId: 'resolved-reference-id' },
-        ]),
+        findReferences: vi.fn(),
+        getName: vi.fn(async () => ({
+          authority: 'ME',
+          kind: 'reference',
+          name: 'my-app',
+          referenceId: 'resolved-reference-id',
+        })),
         getReference: vi.fn(),
       }
       const signer = {
@@ -88,16 +110,28 @@ describe('names utilities', () => {
           namespace: 'namespace-root',
           signer: signer as never,
         }),
-      ).resolves.toEqual({ name: 'my-app', referenceId: 'resolved-reference-id' })
+      ).resolves.toEqual({
+        kind: 'reference',
+        name: 'my-app',
+        referenceId: 'resolved-reference-id',
+      })
 
       expect(signer.address).toHaveBeenCalled()
-      expect(client.findReferences).toHaveBeenCalledWith('ME')
+      expect(client.getName).toHaveBeenCalledWith('my-app')
+      expect(client.findReferences).not.toHaveBeenCalled()
       expect(client.getReference).not.toHaveBeenCalled()
     })
 
-    it('delegates nested namespace handling to the SDK owned-reference lookup', async () => {
+    it('resolves a carrier namespace name through the SDK name lookup', async () => {
       const client = {
-        findReferences: vi.fn(async () => [{ name: 'darwin', referenceId: 'darwin-reference-id' }]),
+        findReferences: vi.fn(),
+        getName: vi.fn(async () => ({
+          authority: 'ME',
+          kind: 'carrier',
+          name: 'my-app',
+          processId: 'carrier-process-id',
+          referenceId: 'carrier-process-id',
+        })),
         getReference: vi.fn(),
       }
       const signer = {
@@ -108,20 +142,27 @@ describe('names utilities', () => {
       await expect(
         resolveNamesReferenceId({
           client: client as never,
-          name: 'darwin',
+          name: 'my-app',
           namespace: 'namespace-root',
           signer: signer as never,
         }),
-      ).resolves.toEqual({ name: 'darwin', referenceId: 'darwin-reference-id' })
+      ).resolves.toEqual({
+        kind: 'carrier',
+        name: 'my-app',
+        processId: 'carrier-process-id',
+        referenceId: 'carrier-process-id',
+      })
 
       expect(signer.address).toHaveBeenCalled()
-      expect(client.findReferences).toHaveBeenCalledWith('ME')
+      expect(client.getName).toHaveBeenCalledWith('my-app')
+      expect(client.findReferences).not.toHaveBeenCalled()
       expect(client.getReference).not.toHaveBeenCalled()
     })
 
-    it('errors when the name is not controlled by the signer in the namespace', async () => {
+    it('errors when the name is missing from the namespace', async () => {
       const client = {
-        findReferences: vi.fn(async () => []),
+        findReferences: vi.fn(),
+        getName: vi.fn(async () => {}),
         getReference: vi.fn(),
       }
       const signer = {
@@ -136,9 +177,33 @@ describe('names utilities', () => {
           namespace: 'namespace-manifest-id',
           signer: signer as never,
         }),
-      ).rejects.toThrow(
-        'Name [missing-name] is not controlled by signer in namespace namespace-manifest-id',
-      )
+      ).rejects.toThrow('Name [missing-name] not found in namespace namespace-manifest-id')
+    })
+
+    it('errors when the name is controlled by another signer', async () => {
+      const client = {
+        findReferences: vi.fn(),
+        getName: vi.fn(async () => ({
+          authority: 'OTHER',
+          kind: 'reference',
+          name: 'my-app',
+          referenceId: 'resolved-reference-id',
+        })),
+        getReference: vi.fn(),
+      }
+      const signer = {
+        address: vi.fn(async () => 'ME'),
+        send: vi.fn(),
+      }
+
+      await expect(
+        resolveNamesReferenceId({
+          client: client as never,
+          name: 'my-app',
+          namespace: 'namespace-manifest-id',
+          signer: signer as never,
+        }),
+      ).rejects.toThrow('Name [my-app] is controlled by OTHER, not signer ME')
     })
   })
 
@@ -212,6 +277,7 @@ describe('names utilities', () => {
           signer: signer as never,
         }),
       ).resolves.toEqual({
+        kind: 'reference',
         name: 'my-app',
         namespace: 'namespace-root',
         referenceId: 'direct-reference-id',
@@ -258,6 +324,48 @@ describe('names utilities', () => {
         'reference-value': 'manifest-id',
         timestamp: '1',
       })
+
+      fetchSpy.mockRestore()
+    })
+
+    it('signs and posts data-free carrier process transactions', async () => {
+      const deployKey = Buffer.from(JSON.stringify(TEST_ARWEAVE_WALLET)).toString('base64')
+      const signer = createNamesJwkSigner('arweave', deployKey)
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+        async () =>
+          new Response('', {
+            status: 200,
+            statusText: 'OK',
+          }),
+      )
+
+      const result = await signer.sendTransaction?.(
+        {
+          quantity: '1',
+          tags: [
+            { name: 'action', value: 'set' },
+            { name: 'reference-value', value: 'manifest-id' },
+          ],
+          target: 'carrier-process-id',
+        },
+        {
+          expectedSigner: arweaveMock.walletAddress,
+          gateway: 'https://arweave.net',
+        },
+      )
+
+      expect(result).toEqual({ id: 'posted-reference-tx-id' })
+      expect(arweaveMock.createTransaction).toHaveBeenCalledWith(
+        { quantity: '1', target: 'carrier-process-id' },
+        TEST_ARWEAVE_WALLET,
+      )
+      expect(arweaveMock.sign).toHaveBeenCalledWith(arweaveMock.tx, TEST_ARWEAVE_WALLET)
+      expect(arweaveMock.tx.addTag).toHaveBeenCalledWith('action', 'set')
+      expect(arweaveMock.tx.addTag).toHaveBeenCalledWith('reference-value', 'manifest-id')
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://arweave.net/tx',
+        expect.objectContaining({ method: 'POST' }),
+      )
 
       fetchSpy.mockRestore()
     })

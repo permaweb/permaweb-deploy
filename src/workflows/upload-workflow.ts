@@ -100,12 +100,14 @@ async function discoverUsableHyperbeamUploader(spinner: ReturnType<typeof ora>):
  * @param deployKey - Wallet material (base64 JWK or hex private key per sig-type)
  * @param config - Upload paths, dedupe, and bundler service URL.
  * @param io - Error handler (must exit the process)
+ * @param afterUpload - Optional callback that reuses the initialized uploader.
  * @returns Transaction ID or folder manifest ID
  */
 export async function runUploadWorkflow(
   deployKey: string,
   config: UploadWorkflowConfig,
   io: UploadWorkflowIo,
+  afterUpload?: (uploadClient: UploadClient) => Promise<void>,
 ): Promise<UploadWorkflowResult> {
   const spinner = ora()
 
@@ -238,6 +240,8 @@ export async function runUploadWorkflow(
     const errorMessage = uploadError instanceof Error ? uploadError.message : String(uploadError)
     io.error(`Upload failed: ${errorMessage}`)
   }
+
+  await afterUpload?.(uploadClient)
 
   return {
     cost,

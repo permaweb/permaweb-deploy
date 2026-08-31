@@ -150,6 +150,17 @@ export const globalFlags = {
       required: false,
     }),
   }),
+  permagit: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      description: 'Publish the current Git HEAD to the named Permagit repository after upload',
+    }),
+  }),
+  permagitRef: createFlagConfig<string | undefined>({
+    flag: Flags.string({
+      dependsOn: ['permagit'],
+      description: 'Permagit branch name (defaults to the current Git branch)',
+    }),
+  }),
   privateKey: createFlagConfig<string | undefined>({
     flag: Flags.string({
       char: 'k',
@@ -234,6 +245,8 @@ export const deployFlags = {
   'names-namespace': globalFlags.namesNamespace.flag,
   'names-node': globalFlags.namesNode.flag,
   'no-dedupe': globalFlags.noDedupe.flag,
+  permagit: globalFlags.permagit.flag,
+  'permagit-ref': globalFlags.permagitRef.flag,
   'private-key': globalFlags.privateKey.flag,
   'reference-id': globalFlags.referenceId.flag,
   'sig-type': globalFlags.sigType.flag,
@@ -285,6 +298,8 @@ export interface DeployConfig {
   'names-node'?: string
   'no-dedupe': boolean
   'private-key'?: string
+  permagit?: string
+  'permagit-ref'?: string
   'reference-id'?: string
   'sig-type': string
   'use-names': boolean
@@ -313,6 +328,8 @@ export const deployFlagConfigs = {
   'names-namespace': globalFlags.namesNamespace,
   'names-node': globalFlags.namesNode,
   'no-dedupe': globalFlags.noDedupe,
+  permagit: globalFlags.permagit,
+  'permagit-ref': globalFlags.permagitRef,
   'private-key': globalFlags.privateKey,
   'reference-id': globalFlags.referenceId,
   'sig-type': globalFlags.sigType,

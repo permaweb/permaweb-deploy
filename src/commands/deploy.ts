@@ -16,7 +16,24 @@ import { type DisplayRow, formatDisplayRows, formatUploadError } from '../utils/
 import { hyperbeamBundlerLink } from '../utils/hyperbeam-uploader.js'
 import { preflightNamesUpdate, publishNamesUpdate } from '../utils/names.js'
 import { expandPath } from '../utils/path.js'
+import {
+  type PermagitPublishResult,
+  preparePermagitTarget,
+  publishPermagit,
+} from '../utils/permagit.js'
 import { runUploadWorkflow } from '../workflows/upload-workflow.js'
+
+function appendPermagitRows(rows: DisplayRow[], result: PermagitPublishResult | undefined): void {
+  if (!result) return
+
+  rows.push(
+    ['Permagit Repo', chalk.cyan(`arweave://${result.repoName}`)],
+    ['Permagit Ref', chalk.cyan(result.refName)],
+    ['Git Commit', chalk.green(result.commitSha)],
+    ['Permagit Pack ID', chalk.green(result.packTransactionId)],
+    ['Permagit Ref ID', chalk.green(result.refTransactionId)],
+  )
+}
 
 export default class Deploy extends Command {
   static override args = {}
@@ -28,6 +45,7 @@ export default class Deploy extends Command {
     '<%= config.bin %> deploy --wallet ./wallet.json --deploy-folder ./dist',
     '<%= config.bin %> deploy --wallet ./wallet.json --deploy-file ./dist/index.html',
     '<%= config.bin %> deploy --wallet ./wallet.json --uploader-type hyperbeam --uploader https://hyperbeam.example.com',
+    '<%= config.bin %> deploy --wallet ./wallet.json --permagit my-app',
     '<%= config.bin %> deploy --wallet ./wallet.json --use-names --name my-app',
     '<%= config.bin %> deploy --wallet ./wallet.json --use-names --reference-id REFERENCE_ID',
   ]
@@ -48,6 +66,10 @@ export default class Deploy extends Command {
       const baseConfig = (await resolveConfig<typeof deployFlagConfigs>(deployFlagConfigs, flags, {
         interactive,
       })) as DeployConfig
+
+      if (baseConfig.permagit && baseConfig['sig-type'] !== 'arweave') {
+        this.error('--permagit requires an Arweave JWK (--sig-type arweave)')
+      }
 
       let walletConfig: { privateKey?: string; wallet?: string } = {
         privateKey: baseConfig['private-key'],
@@ -131,10 +153,24 @@ export default class Deploy extends Command {
 
       this.log(chalk.bold(chalk.cyan('\nStarting deployment...\n')))
       try {
+        const permagitTarget = baseConfig.permagit
+          ? preparePermagitTarget(baseConfig.permagit, deployKey, baseConfig['permagit-ref'])
+          : undefined
+        let permagitResult: PermagitPublishResult | undefined
+        const upload = () =>
+          runUploadWorkflow(
+            deployKey,
+            deployConfig,
+            { error: (message) => this.error(message) },
+            permagitTarget
+              ? async (uploadClient) => {
+                  permagitResult = await publishPermagit(permagitTarget, uploadClient)
+                }
+              : undefined,
+          )
+
         if (!deployConfig['use-names']) {
-          const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
-            error: (msg) => this.error(msg),
-          })
+          const uploadResult = await upload()
           const txOrManifestId = uploadResult.transactionId
           const effectiveUploader = uploadResult.uploader ?? deployConfig.uploader
 
@@ -161,6 +197,7 @@ export default class Deploy extends Command {
             rows.push(['Bundler link', chalk.yellow(bundlerLink)])
           }
 
+          appendPermagitRows(rows, permagitResult)
           rows.push(['Arweave URL', chalk.yellow(`https://arweave.net/${txOrManifestId}`)])
 
           this.log(chalk.bold(chalk.green('Deployment Successful!')))
@@ -196,9 +233,7 @@ export default class Deploy extends Command {
 
         spinner.succeed('Names target validated')
 
-        const uploadResult = await runUploadWorkflow(deployKey, deployConfig, {
-          error: (msg) => this.error(msg),
-        })
+        const uploadResult = await upload()
         const txOrManifestId = uploadResult.transactionId
         const effectiveUploader = uploadResult.uploader ?? deployConfig.uploader
 
@@ -239,6 +274,7 @@ export default class Deploy extends Command {
           rows.push(['Bundler link', chalk.yellow(bundlerLink)])
         }
 
+        appendPermagitRows(rows, permagitResult)
         rows.push(
           ...(namesUpdate.name ? ([['Name', chalk.yellow(namesUpdate.name)]] as DisplayRow[]) : []),
           ['Names Target Kind', chalk.cyan(namesUpdate.kind)],

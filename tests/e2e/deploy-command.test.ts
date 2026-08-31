@@ -123,6 +123,71 @@ describe(
       expect(result.error).toBeUndefined()
     })
 
+    it('should reject Permagit publishing with a non-Arweave signer', async () => {
+      const result = await runCommand([
+        'deploy',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
+        '--private-key',
+        TEST_ETH_PRIVATE_KEY,
+        '--sig-type',
+        'ethereum',
+        '--permagit',
+        'my-app',
+      ])
+
+      expect(result.error).toBeDefined()
+      expect(result.error?.message).toContain(
+        '--permagit requires an Arweave JWK (--sig-type arweave)',
+      )
+    })
+
+    it('should publish the current Git HEAD to Permagit with the deployment JWK', async () => {
+      const deploymentId = 'd'.repeat(43)
+      const permagitId = 'p'.repeat(43)
+      const permagitUploads: Record<string, string>[] = []
+
+      server.use(
+        http.post(`${DEFAULT_LEGACY_UPLOADER}/v1/tx/arweave`, async ({ request }) => {
+          const raw = Buffer.from(await request.arrayBuffer())
+          const tags = dataItemTags(raw)
+          if (tags['App-Name'] === 'permagit') {
+            permagitUploads.push(tags)
+            return HttpResponse.json({ id: permagitId })
+          }
+
+          return HttpResponse.json({ id: deploymentId })
+        }),
+      )
+
+      const result = await runCommand([
+        'deploy',
+        '--deploy-file',
+        './tests/fixtures/test-app/index.html',
+        '--wallet',
+        './tests/fixtures/test_wallet.json',
+        '--no-dedupe',
+        '--permagit',
+        'my-app',
+        '--permagit-ref',
+        'permagit-test',
+      ])
+
+      expect(result.error).toBeUndefined()
+      expect(permagitUploads.some((tags) => tags.Type === 'pack')).toBe(true)
+      expect(permagitUploads.some((tags) => tags.Type === 'pack-chunk')).toBe(true)
+      expect(permagitUploads.find((tags) => tags.Type === 'ref')).toEqual({
+        'App-Name': 'permagit',
+        Owner: walletAddress(TEST_ARWEAVE_WALLET),
+        'Pack-Tx': permagitId,
+        'Ref-Name': 'refs/heads/permagit-test',
+        'Ref-Old': '0'.repeat(40),
+        'Ref-Target': expect.stringMatching(/^[\da-f]{40}$/),
+        Repo: 'my-app',
+        Type: 'ref',
+      })
+    })
+
     it('should deploy without requiring names publishing by default', async () => {
       const result = await runCommand([
         'deploy',

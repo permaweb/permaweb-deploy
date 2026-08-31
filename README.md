@@ -28,6 +28,7 @@ The CLI uses legacy ANS-104 bundlers for the default upload path, supports Hyper
 
 - **Arweave uploads:** Upload a folder or a single file.
 - **Names publishing:** Update a Permaweb Name after upload.
+- **Permagit publishing:** Optionally publish the current committed Git `HEAD` to Permagit with the deployment wallet.
 - **Legacy bundler uploads:** Use legacy ANS-104 upload endpoints by default.
 - **HyperBEAM uploads:** Sign ANS-104 items and post them to a HyperBEAM bundler route.
 - **Arweave manifests:** Create manifest `0.2.0` documents for folder deployments, with SPA fallback detection.
@@ -60,6 +61,12 @@ Deploy and update a Permaweb Name:
 
 ```bash
 permaweb-deploy deploy --use-names --name my-app --deploy-folder ./dist
+```
+
+Deploy and publish the current Git `HEAD` to Permagit with the same Arweave JWK:
+
+```bash
+permaweb-deploy deploy --deploy-folder ./dist --permagit my-app
 ```
 
 Or deploy and update a direct reference ID:
@@ -104,6 +111,8 @@ base64 -i wallet.json
 Set the encoded value as `DEPLOY_KEY`, or pass `--wallet ./wallet.json`.
 
 Names updates currently require `--sig-type arweave`. Legacy references are signed as ANS-104 data items; carrier-backed names are signed as Arweave transactions. Ethereum, Polygon, and KYVE signers remain supported for upload-only flows.
+
+Permagit publishing also requires `--sig-type arweave` and a Git executable. It publishes the current committed `HEAD`; it does not stage files, create a local commit, change the current branch, or add a Git remote.
 
 Use a dedicated deployment wallet and make sure it has enough upload credits/balance for the selected legacy bundler.
 
@@ -209,6 +218,8 @@ HyperBEAM uploads require an Arweave JWK signer. The default route is `/~bundler
 - `--sig-type, -s`: signer type. Choices: `arweave`, `ethereum`, `polygon`, `kyve`. Default: `arweave`.
 - `--wallet, -w`: path to wallet file.
 - `--private-key, -k`: private key or JWK JSON string.
+- `--permagit`: publish the current committed Git `HEAD` to this Permagit repository after upload.
+- `--permagit-ref`: Permagit branch name. Defaults to the current Git branch.
 - `--no-dedupe`: disable dedupe cache.
 - `--dedupe-cache-max-entries`: LRU cache size. Default: `10000`.
 - `--uploader`: bundler service base URL. Legacy uploads default to `https://up.arweave.net`; HyperBEAM uploads auto-discover an active PermawebOS uploader when omitted.
@@ -342,6 +353,8 @@ permaweb-deploy/
 
 - **`DEPLOY_KEY environment variable not set`:** pass `--wallet`, pass `--private-key`, or set `DEPLOY_KEY`.
 - **`Names updates currently require --sig-type arweave`:** use an Arweave JWK for names updates.
+- **`--permagit requires an Arweave JWK`:** use `--sig-type arweave` and provide an Arweave JWK.
+- **`--permagit must be run inside a Git repository`:** run the command from a checked-out repository.
 - **`Name [...] not found in namespace ...`:** verify the namespace manifest and spelling.
 - **`Name [...] is controlled by ..., not signer ...`:** use the wallet that controls the name.
 - **`signer is not reference authority`:** use the wallet that controls the target legacy reference.
